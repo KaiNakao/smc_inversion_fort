@@ -1,0 +1,6 @@
+*
+!*/
+!/src/*
+!/input/.gitkeep
+!makefile
+!.gitignore
