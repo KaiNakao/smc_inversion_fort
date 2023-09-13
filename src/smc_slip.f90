@@ -182,12 +182,14 @@ contains
         do i = 1, size
             mean = mean + vec(i)
         end do
+!$omp end parallel do
         mean = mean/size
         std = 0d0
 !$omp parallel do private(i) reduction(+:std)
         do i = 1, size
             std = std + (vec(i) - mean)**2d0
         end do
+!$omp end parallel do
         std = std/size
         std = sqrt(std)
     end subroutine slip_calc_mean_std_vector
@@ -275,7 +277,6 @@ contains
             weights(iparticle) = weights(iparticle)/sum
         end do
 !$omp end parallel do
-        return
     end subroutine
 
     subroutine slip_calc_mean_particles(particles, weights, &
