@@ -290,7 +290,7 @@ contains
         do idim = 1, ndim
             mean(idim) = 0d0
         end do
-!$omp parallel do private(iparticle, weight, idim) reduction(+:mean(1:ndim))
+!$omp parallel do private(iparticle, weight, idim) reduction(+:mean)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
             do idim = 1, ndim
@@ -317,7 +317,7 @@ contains
         ! double st_time, en_time
         ! st_time = omp_get_wtime()
 !$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
-!$omp reduction(+:cov(1:ndim, 1:ndim))
+!$omp reduction(+:cov)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
             do jdim = 1, ndim
