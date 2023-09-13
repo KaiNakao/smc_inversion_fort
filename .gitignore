@@ -1,7 +1,8 @@
 *
 *.mod
 !*/
-!/src/*
+!/src/*.f90
+!/src/*.cpp
 !/input/.gitkeep
 !makefile
 !.gitignore
