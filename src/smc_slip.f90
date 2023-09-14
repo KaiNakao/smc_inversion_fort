@@ -1,4 +1,5 @@
 module smc_slip
+    use omp_lib
     implicit none
 contains
     subroutine slip_BoxMuller(p, q)

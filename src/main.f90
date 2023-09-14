@@ -102,7 +102,7 @@ program main
     ndof = (nxi - 1)*(neta - 1)
 
     ! number of samples
-    nparticle_slip = 2000
+    nparticle_slip = 20000
     nparticle_fault = 2000
 
     ! constrain max value for slip

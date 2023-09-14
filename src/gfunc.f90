@@ -162,8 +162,7 @@ contains
             uetanode(:), r1vec(:), r2vec(:), nvec(:), response_dist(:, :), uobs(:), uret(:)
         integer, intent(in) :: cny_fault(:, :), target_id_val(:)
         integer, intent(inout) ::  node_id_in_patch(:)
-        integer, intent(in) :: nsar, ngnss
-        integer, intent(inout) :: target_id_size
+        integer, intent(in) :: nsar, ngnss, target_id_size
         integer ::  iobs, idim
         double precision :: xobs, yobs
         ! for SAR observation points
@@ -234,6 +233,9 @@ contains
         end do
 
         ! loop for each degree of freedom of slip
+!$omp parallel do private(idof, inode, target_id_size, itarget, target_id_val, &
+!$omp idirection, slip_dist, node_id_in_patch, xinode, etanode, uxinode, uetanode, &
+!$omp r1vec, r2vec, nvec, response_dist, uobs, uret, iobs, idim) reduction(+:gmat)
         do idof = 1, ndof
             inode = id_dof(idof)
             target_id_size = node_to_elem_size(inode)
