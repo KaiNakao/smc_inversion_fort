@@ -290,5 +290,6 @@ program main
     !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
     !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
     !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
+    call mpi_finalize(ierr)
 
 end program main
