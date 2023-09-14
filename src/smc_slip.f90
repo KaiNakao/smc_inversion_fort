@@ -333,7 +333,7 @@ contains
         ! en_time = omp_get_wtime()
         do jdim = 1, ndim
             do idim = jdim, ndim
-                cov(idim, jdim) = cov(idim, jdim)*0.04
+                cov(idim, jdim) = cov(idim, jdim)*0.04d0
             end do
         end do
 

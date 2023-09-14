@@ -310,7 +310,7 @@ contains
 
         do jdim = 1, ndim
             do idim = 1, ndim
-                cov(idim, jdim) = 0.
+                cov(idim, jdim) = 0d0
             end do
         end do
 
@@ -635,7 +635,7 @@ contains
             close (17)
         end if
         iter = iter + 1
-        gamma = 0.
+        gamma = 0d0
         do while (1.-gamma > 10d0**(-8d0))
             if (myid == 0) then
                 ! find the gamma such that c.o.v of weights = 0.5
