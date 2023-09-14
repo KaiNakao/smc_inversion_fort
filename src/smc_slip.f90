@@ -12,8 +12,8 @@ contains
         call random_number(s)
         !   Gaussian random numbers,
         !   with weights proportional to eˆ{-pˆ2/2}and eˆ{-qˆ2/2}
-        p = sqrt(-2.*log(r))*sin(2.*pi*s)
-        q = sqrt(-2.*log(r))*cos(2.*pi*s)
+        p = sqrt(-2d0*log(r))*sin(2d0*pi*s)
+        q = sqrt(-2d0*log(r))*cos(2d0*pi*s)
     end subroutine slip_BoxMuller
 
     double precision function cdf_norm(x, mu, sigma2)
