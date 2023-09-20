@@ -1,9 +1,9 @@
 COMPILER_F90 = mpifrtpx
 COMPILER_CPP = mpiFCCpx
-FLAGS_F90   = -Kfast,openmp -SSL2
-FLAGS_CPP   = -Kfast,openmp -SSL2
-# FLAGS_F90   = -g -fopenmp -traceback -check all -warn all -fp-model=precise -qmkl -lmpi
-# FLAGS_CPP   = -g -fopenmp -traceback -fp-model=precise -qmkl -lmpi
+# FLAGS_F90   = -Kfast,openmp -SSL2
+# FLAGS_CPP   = -Kfast,openmp -SSL2
+FLAGS_F90   = -g -Kopenmp -SSL2 -Hxua
+FLAGS_CPP   = -g -Kopenmp
 
 # CFLAGS   = -Wall -Wextra -Wno-sign-compare -g -fopenmp -fsanitize=address,undefined 
 # FFLAGS   = -g -fopenmp
