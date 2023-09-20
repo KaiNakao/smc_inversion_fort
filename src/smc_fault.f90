@@ -681,6 +681,9 @@ contains
             end do
             sum_assigned = &
                 id_start(work_size) + work_assigned_num(work_size) - 1
+            if (sum_assigned > 5 * work_size) then
+                print *, "too many samples assigned to process", myid
+            end if
             call mpi_barrier(mpi_comm_world, ierr)
             st_time = omp_get_wtime()
             call work_mcmc_sampling(work_assigned_num, work_particles, &
