@@ -233,9 +233,9 @@ contains
         end do
 
         ! loop for each degree of freedom of slip
-!$omp parallel do private(idof, inode, target_id_size, itarget, target_id_val, &
-!$omp idirection, slip_dist, node_id_in_patch, xinode, etanode, uxinode, uetanode, &
-!$omp r1vec, r2vec, nvec, response_dist, uobs, uret, iobs, idim) reduction(+:gmat)
+! $omp parallel do private(idof, inode, target_id_size, itarget, target_id_val, &
+! $omp idirection, slip_dist, node_id_in_patch, xinode, etanode, uxinode, uetanode, &
+! $omp r1vec, r2vec, nvec, response_dist, uobs, uret, iobs, idim) reduction(+:gmat)
         do idof = 1, ndof
             inode = id_dof(idof)
             target_id_size = node_to_elem_size(inode)
