@@ -87,7 +87,7 @@ program main
     call random_seed(put=seed)
 
     ! generate output directory
-    output_dir = "output_200_1920/"
+    output_dir = "output_2000_1920/"
     command = "mkdir -p "
     command = trim(command)//" "//output_dir
     call system(command)
@@ -102,7 +102,7 @@ program main
     ndof = (nxi - 1)*(neta - 1)
 
     ! number of samples
-    nparticle_slip = 200
+    nparticle_slip = 2000
     nparticle_fault = 1920
     ! constrain max value for slip
     max_slip = 3d0

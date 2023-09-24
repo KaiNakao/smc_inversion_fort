@@ -390,7 +390,9 @@ contains
             sorted_idx(iparticle) = iparticle
         end do
         call qsort(assigned_num, sorted_idx, nparticle)
-
+        do iparticle = 1, nparticle
+            print *, assigned_num(sorted_idx(iparticle))
+        end do
         do iproc = 1, numprocs
             do iparticle = 1, work_size
                 id_org = sorted_idx((iparticle - 1)*numprocs + iproc)
@@ -759,6 +761,10 @@ contains
             end if
             iter = iter + 1
             call mpi_barrier(mpi_comm_world, ierr)
+            ! if (iter == 2) then 
+            !     call mpi_finalize(ierr)
+            !     stop
+            ! end if
 !     if (myid == 0) {
 !     en_time = MPI_Wtime()
 !     printf("3part time: %f\n", en_time - st_time)
