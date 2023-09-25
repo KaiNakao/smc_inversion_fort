@@ -574,8 +574,8 @@ contains
         if (myid == 0) then
             allocate (particles(ndim, nparticle))
             allocate (sum_assigned_ls(numprocs))
-            allocate (buf_likelihood(5*work_size, numprocs))
-            allocate (buf_particles_flat(5*work_size*ndim, numprocs))
+            allocate (buf_likelihood(50*work_size, numprocs))
+            allocate (buf_particles_flat(50*work_size*ndim, numprocs))
             allocate (weights(nparticle))
             allocate (mean(ndim))
             allocate (likelihood_ls(nparticle))
@@ -590,8 +590,8 @@ contains
         end if
 
         allocate (work_particles(ndim, work_size))
-        allocate (work_particles_new(ndim, 5*work_size))
-        allocate (work_likelihood_ls(5*work_size))
+        allocate (work_particles_new(ndim, 50*work_size))
+        allocate (work_likelihood_ls(50*work_size))
         allocate (work_assigned_num(work_size))
         allocate (particle_cur(ndim))
         allocate (particle_cand(ndim))
@@ -683,7 +683,7 @@ contains
             end do
             sum_assigned = &
                 id_start(work_size) + work_assigned_num(work_size) - 1
-            if (sum_assigned > 5 * work_size) then
+            if (sum_assigned > 50 * work_size) then
                 print *, "too many samples assigned to process", myid
             end if
             call mpi_barrier(mpi_comm_world, ierr)
