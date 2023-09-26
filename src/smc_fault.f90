@@ -228,7 +228,7 @@ contains
         double precision :: min_likelihood, likelihood, cv_threshold
         double precision :: lower, upper, err
         double precision :: diff_gamma, mean, std, cv
-        cv_threshold = 1d0
+        cv_threshold = 5d-1
         ! find minimum of negative log likelihood
         min_likelihood = likelihood_ls(1)
         do iparticle = 1, nparticle
