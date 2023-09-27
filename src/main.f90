@@ -88,7 +88,7 @@ program main
 
     ! generate output directory
     output_dir = "output_200000_1920/"
-
+    
     command = "mkdir -p "
     command = trim(command)//" "//output_dir
     call system(command)
@@ -103,8 +103,8 @@ program main
     ndof = (nxi - 1)*(neta - 1)
 
     ! number of samples
-    nparticle_slip = 200000
-    nparticle_fault = 1920
+    nparticle_slip = 20000
+    nparticle_fault = 20000
 
     ! constrain max value for slip
     max_slip = 3d0
@@ -240,7 +240,6 @@ program main
     !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
     !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
     !                 19.7599089800000/)
-
     ! st_time = omp_get_wtime()
     ! neglog = fault_calc_likelihood( &
     !          particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
