@@ -87,7 +87,8 @@ program main
     call random_seed(put=seed)
 
     ! generate output directory
-    output_dir = "output_20000_20000_edge/"
+    output_dir = "output_200000_1920/"
+    
     command = "mkdir -p "
     command = trim(command)//" "//output_dir
     call system(command)
@@ -277,7 +278,8 @@ program main
     ! print *, "neglog: ", neglog
 
     allocate (range(2, ndim_fault))
-    range(:, :) = reshape((/-10., 10., -30., 0., -30., -1., -20., 20., 50., 90., &
+
+    range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
                             -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
                           (/2, ndim_fault/))
 
