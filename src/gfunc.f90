@@ -132,11 +132,11 @@ contains
 
                     !   location of the point source specified by
                     !   global coordinates(x, y, z)
-                    xsource = xf + (leta - eta)*cos(dip_rad)*cos(strike_rad) + &
+                    xsource = xf - eta*cos(dip_rad)*cos(strike_rad) + &
                               xi*sin(strike_rad)
-                    ysource = yf - (leta - eta)*cos(dip_rad)*sin(strike_rad) + &
+                    ysource = yf + eta*cos(dip_rad)*sin(strike_rad) + &
                               xi*cos(strike_rad)
-                    zsource = zf - (leta - eta)*sin(dip_rad)
+                    zsource = zf + eta*sin(dip_rad)
                     !   calculate displacement by Okada model
                     call call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
                                     dip_pass, area/4., strike, uret)

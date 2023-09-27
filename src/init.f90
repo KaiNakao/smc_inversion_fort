@@ -85,8 +85,8 @@ contains
         do i = 1, nxi + 1
             do j = 1, neta + 1
                 node_id = i + (nxi + 1)*(j - 1)
-                xi = (i - 1)*dxi
-                eta = (j - 1)*deta
+                xi = (i - 1)*dxi - lxi/2d0
+                eta = (j - 1)*deta - leta/2d0
                 coor(1, node_id) = xi
                 coor(2, node_id) = eta
 

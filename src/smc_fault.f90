@@ -683,7 +683,7 @@ contains
             end do
             sum_assigned = &
                 id_start(work_size) + work_assigned_num(work_size) - 1
-            if (sum_assigned > 50 * work_size) then
+            if (sum_assigned > 50*work_size) then
                 print *, "too many samples assigned to process", myid
             end if
             call mpi_barrier(mpi_comm_world, ierr)
@@ -761,7 +761,7 @@ contains
             end if
             iter = iter + 1
             call mpi_barrier(mpi_comm_world, ierr)
-            ! if (iter == 2) then 
+            ! if (iter == 2) then
             !     call mpi_finalize(ierr)
             !     stop
             ! end if
