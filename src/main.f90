@@ -87,7 +87,8 @@ program main
     call random_seed(put=seed)
 
     ! generate output directory
-    output_dir = "output_20000_20000_center/"
+    output_dir = "output_200000_1920/"
+
     command = "mkdir -p "
     command = trim(command)//" "//output_dir
     call system(command)
@@ -102,8 +103,8 @@ program main
     ndof = (nxi - 1)*(neta - 1)
 
     ! number of samples
-    nparticle_slip = 20000
-    nparticle_fault = 20000
+    nparticle_slip = 200000
+    nparticle_fault = 1920
 
     ! constrain max value for slip
     max_slip = 3d0
@@ -239,10 +240,7 @@ program main
     !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
     !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
     !                 19.7599089800000/)
-    ! particle(:) = (/10., 5., -23.66, &
-    !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
-    !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
-    !                 19.7599089800000/)
+
     ! st_time = omp_get_wtime()
     ! neglog = fault_calc_likelihood( &
     !          particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
@@ -281,9 +279,7 @@ program main
     ! print *, "neglog: ", neglog
 
     allocate (range(2, ndim_fault))
-    ! range(:, :) = reshape((/-10., 10., -30., 0., -30., -1., -20., 20., 50., 90., &
-    !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
-    !                       (/2, ndim_fault/))
+
     range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
                             -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
                           (/2, ndim_fault/))
