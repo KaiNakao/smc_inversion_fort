@@ -1,7 +1,11 @@
-COMPILER_F90 = mpifrtpx
-COMPILER_CPP = mpiFCCpx
-FLAGS_F90   = -Kfast,openmp -SSL2
-FLAGS_CPP   = -Kfast,openmp -SSL2
+# COMPILER_F90 = mpifrtpx
+# COMPILER_CPP = mpiFCCpx
+# FLAGS_F90   = -Kfast,openmp -SSL2
+# FLAGS_CPP   = -Kfast,openmp -SSL2
+COMPILER_F90 = mpiifort -fc=ifx
+COMPILER_CPP = mpiicpc -cxx=icpx 
+FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
+FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
 # FLAGS_F90   = -g -Kopenmp -SSL2 -Haesofux
 # FLAGS_CPP   = -g -Kopenmp
 
