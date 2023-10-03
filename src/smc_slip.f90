@@ -431,15 +431,15 @@ contains
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
                     !   non negative constraints
-                    particle_cand(idim) = max(0d0, particle_cand(idim))
-                    ! if (particle_cand(idim) < 0d0) then
-                    !     particle_cand(idim) = -particle_cand(idim)
-                    ! end if
+                    ! particle_cand(idim) = max(0d0, particle_cand(idim))
+                    if (particle_cand(idim) < 0d0) then
+                        particle_cand(idim) = -particle_cand(idim)
+                    end if
                     !   max slip constraints
-                    particle_cand(idim) = min(max_slip, particle_cand(idim))
-                    ! if (particle_cand(idim) > max_slip) then
-                    !     particle_cand(idim) = 2*max_slip - particle_cand(idim)
-                    ! end if
+                    ! particle_cand(idim) = min(max_slip, particle_cand(idim))
+                    if (particle_cand(idim) > max_slip) then
+                        particle_cand(idim) = 2*max_slip - particle_cand(idim)
+                    end if
                 end do
 
                 ! calculate negative log likelihood/prior/posterior

@@ -87,8 +87,8 @@ program main
     call random_seed(put=seed)
 
     ! generate output directory
-    output_dir = "output_200000_1920/"
-    
+    output_dir = "output_20000_20000_max100/"
+
     command = "mkdir -p "
     command = trim(command)//" "//output_dir
     call system(command)
@@ -107,7 +107,7 @@ program main
     nparticle_fault = 20000
 
     ! constrain max value for slip
-    max_slip = 3d0
+    max_slip = 1d2
 
     ! dimension of fault parameter
     ndim_fault = 10
@@ -165,55 +165,59 @@ program main
     allocate (slip_particle_cur(ndim_slip))
     allocate (slip_particle_cand(ndim_slip))
 
-    ! ! calculate diplacement for fixed fault and slip distribution
-    ! allocate (slip(2, nnode))
-    ! allocate (svec(2*ndof))
-    ! particle = (/4.99413389000000, -9.81891359000000, -15.1300002400000, &
-    !              0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
-    !              0.350170955000000, -3.43126560500001, 31.6602526250000, &
-    !              19.7599089800000/)
-    ! print *, particle
-    ! lxi = particle(9)
-    ! leta = particle(10)
-    ! call discretize_fault(lxi, leta, nxi, neta, cny_fault, coor_fault, &
-    !                       node_to_elem_val, node_to_elem_size, id_dof)
-    ! open (10, file="/home/nakao/smc_inversion/visualize/slip_mean.csv", &
-    !       status='old')
-    ! do i = 1, nnode
-    !     read (10, *) slip(1, i), slip(2, i)
-    ! end do
-    ! do i = 1, ndof
-    !     svec(2*i - 1) = slip(1, id_dof(i))
-    !     svec(2*i) = slip(2, id_dof(i))
-    ! end do
-    ! close (10)
+    ! calculate diplacement for fixed fault and slip distribution
+    allocate (slip(2, nnode))
+    allocate (svec(2*ndof))
 
-    ! print *, (svec)
-    ! xf = particle(1)
-    ! yf = particle(2)
-    ! zf = particle(3)
-    ! strike = particle(4)
-    ! dip = particle(5)
-    ! log_sigma_sar2 = particle(6)
-    ! log_sigma_gnss2 = particle(7)
-    ! log_alpha2 = particle(8)
-    ! call calc_greens_func(gmat, slip_dist, cny_fault, coor_fault, &
-    !                       obs_points, obs_unitvec, leta, xf, yf, zf, strike, dip, &
-    !                       node_to_elem_val, node_to_elem_size, id_dof, nsar, ngnss, &
-    !                       nobs, nnode, ndof, target_id_val, node_id_in_patch, xinode, &
-    !                       etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
-    !                       uobs, uret)
+    allocate (particle(ndim_fault))
+    open (10, file="visualize/mean_fault_max100.dat", status='old')
+    do i = 1, ndim_fault
+        read (10, *) particle(i)
+        print *, i, particle(i)
+    end do
+    close (10)
 
-    ! call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
-    !            nobs, svec, 1, 0d0, gsvec, 1)
-    ! open (10, file="/home/nakao/smc_inversion/visualize/dvec_est.dat", &
-    !       status='replace')
-    ! do i = 1, nobs
-    !     write (10, *), gsvec(i)
-    ! end do
+    print *, particle
+    lxi = particle(9)
+    leta = particle(10)
+    call discretize_fault(lxi, leta, nxi, neta, cny_fault, coor_fault, &
+                          node_to_elem_val, node_to_elem_size, id_dof)
+    open (10, file="visualize/mean_slip_max100.dat", status='old')
+    do i = 1, nnode
+        read (10, *) slip(1, i), slip(2, i)
+        print *, i, slip(1, i), slip(2, i)
+    end do
+    do i = 1, ndof
+        svec(2*i - 1) = slip(1, id_dof(i))
+        svec(2*i) = slip(2, id_dof(i))
+    end do
+    close (10)
+
+    print *, (svec)
+    xf = particle(1)
+    yf = particle(2)
+    zf = particle(3)
+    strike = particle(4)
+    dip = particle(5)
+    log_sigma_sar2 = particle(6)
+    log_sigma_gnss2 = particle(7)
+    log_alpha2 = particle(8)
+    call calc_greens_func(gmat, slip_dist, cny_fault, coor_fault, &
+                          obs_points, obs_unitvec, leta, xf, yf, zf, strike, dip, &
+                          node_to_elem_val, node_to_elem_size, id_dof, nsar, ngnss, &
+                          nobs, nnode, ndof, target_id_val, node_id_in_patch, xinode, &
+                          etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+                          uobs, uret)
+
+    call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
+               nobs, svec, 1, 0d0, gsvec, 1)
+    open (10, file="visualize/dvec_est_max100.dat", status='replace')
+    do i = 1, nobs
+        write (10, *), gsvec(i)
+    end do
 
     ! calculate likelihood for given fault
-    allocate (particle(ndim_fault))
+    ! allocate (particle(ndim_fault))
     ! allocate (tmp(ndim_fault + 1))
     ! do i = 1, ndim_fault
     !     particle(i) = 0d0
@@ -221,7 +225,7 @@ program main
     ! do i = 1, ndim_fault + 1
     !     tmp(i) = 0d0
     ! end do
-    ! open (10, file="output/14.csv", status='old')
+    ! open (10, file="output_20000_20000_max100/26.csv", status='old')
     ! do i = 1, nparticle_fault
     !     read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
     !         tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
@@ -234,12 +238,12 @@ program main
     !     particle(j) = particle(j)/nparticle_fault
     ! end do
     ! print *, particle
-    ! particle(:) = (/8.587707, -4.485232, -22.583390, 12.771108, 57.633782, &
-    !                 -1.846341, 0.966436, 1.428768, 36.731036, 6.393948/)
-    ! particle(:) = (/4.99413389000000, -9.81891359000000, -15.1300002400000, &
-    !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
-    !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
-    !                 19.7599089800000/)
+    ! ! particle(:) = (/8.587707, -4.485232, -22.583390, 12.771108, 57.633782, &
+    ! !                 -1.846341, 0.966436, 1.428768, 36.731036, 6.393948/)
+    ! ! particle(:) = (/4.99413389000000, -9.81891359000000, -15.1300002400000, &
+    ! !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
+    ! !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
+    ! !                 19.7599089800000/)
     ! st_time = omp_get_wtime()
     ! neglog = fault_calc_likelihood( &
     !          particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
@@ -253,13 +257,19 @@ program main
     !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
     !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
     !          slip_particle_cand, slip_st_rand, 1, &
-    !          "output/slip_from_mean_fault200000.dat")
+    !          "visualize/slip_from_mean_fault_max100.dat")
     ! en_time = omp_get_wtime()
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
-    ! open (10, file="output/mean_faultsize.dat", status='replace')
-    ! write (10, "(f12.5)") particle(9), particle(10)
+    ! ! open (10, file="visualize/mean_faultsize.dat", status='replace')
+    ! ! write (10, "(f12.5)") particle(9), particle(10)
+    ! ! close (10)
+    ! open (10, file="visualize/mean_fault_max100.dat", status='replace')
+    ! do i = 1, ndim_fault
+    !     write (10, *) particle(i)
+    ! end do
     ! close (10)
+
     ! st_time = omp_get_wtime()
     ! neglog = fault_calc_likelihood( &
     !          particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
@@ -277,25 +287,23 @@ program main
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
 
-    allocate (range(2, ndim_fault))
-
-    range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-                            -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
-                          (/2, ndim_fault/))
-
-    call fault_smc_exec( &
-        output_dir, range, nparticle_fault, ndim_fault, &
-        myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-        coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-        lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
-        obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
-        xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
-        response_dist, uobs, uret, slip_particles, &
-        slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
-        lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
-        slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
-        slip_st_rand, slip_particle_cur, slip_particle_cand, &
-        slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
-    call mpi_finalize(ierr)
+    ! allocate (range(2, ndim_fault))
+    ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
+    !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    !                       (/2, ndim_fault/))
+    ! call fault_smc_exec( &
+    !     output_dir, range, nparticle_fault, ndim_fault, &
+    !     myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+    !     lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+    !     obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
+    !     xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
+    !     response_dist, uobs, uret, slip_particles, &
+    !     slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
+    !     lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
+    !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+    !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
+    !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
+    ! call mpi_finalize(ierr)
 
 end program main
