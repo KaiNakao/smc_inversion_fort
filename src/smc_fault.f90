@@ -547,8 +547,7 @@ contains
         double precision :: gamma, gamma_prev
         double precision, allocatable :: particles(:, :)
         ! array for only the master process
-        integer, allocatable :: sum_assigned_ls(:)
-        double precision, allocatable :: buf_likelihood(:, :), buf_particles_flat(:, :)
+        integer, allocatable :: sum_assigned_ls(:), displs(:)
         double precision, allocatable :: weights(:), mean(:)
         double precision, allocatable :: likelihood_ls(:)
         integer, allocatable :: assigned_num(:)
@@ -574,8 +573,7 @@ contains
         if (myid == 0) then
             allocate (particles(ndim, nparticle))
             allocate (sum_assigned_ls(numprocs))
-            allocate (buf_likelihood(50*work_size, numprocs))
-            allocate (buf_particles_flat(50*work_size*ndim, numprocs))
+            allocate (displs(numprocs + 1))
             allocate (weights(nparticle))
             allocate (mean(ndim))
             allocate (likelihood_ls(nparticle))
@@ -587,6 +585,8 @@ contains
             allocate (particles(1, 1))
             allocate (likelihood_ls(1))
             allocate (assigned_num(1))
+            allocate (sum_assigned_ls(1))
+            allocate (displs(1))
         end if
 
         allocate (work_particles(ndim, work_size))
@@ -632,6 +632,7 @@ contains
                 do idim = 1, ndim
                     write (17, "(f12.5)", advance="no") particles(idim, iparticle)
                 end do
+                print *, likelihood_ls(iparticle)
                 write (17, "(f12.5)") likelihood_ls(iparticle)
             end do
             close (17)
@@ -662,6 +663,10 @@ contains
                     end do
                     sum_assigned_ls(iproc) = sum_assigned
                 end do
+                displs(1) = 0
+                do iproc = 1, numprocs
+                    displs(iproc + 1) = displs(iproc) + sum_assigned_ls(iproc)
+                end do
             end if
             call mpi_bcast(gamma, 1, mpi_double_precision, 0, mpi_comm_world, ierr)
             call mpi_bcast(cov, ndim*ndim, mpi_double_precision, 0, mpi_comm_world, ierr)
@@ -670,11 +675,6 @@ contains
                              0, mpi_comm_world, ierr)
             call mpi_scatter(assigned_num, work_size, mpi_integer, work_assigned_num, &
                              work_size, mpi_integer, 0, mpi_comm_world, ierr)
-!     if (myid == 0) {
-!     en_time = MPI_Wtime()
-!     printf("1part time: %f\n", en_time - st_time)
-!     st_time = MPI_Wtime()
-!     }
 
             id_start(1) = 1
             do iparticle = 1, work_size - 1
@@ -712,38 +712,18 @@ contains
             if (myid == 0) then
                 print *, "work_mcmc_sampling etime: ", en_time - st_time
             end if
-            if (myid == 0) then
-                do iproc = 2, numprocs
-                    call mpi_recv(buf_likelihood(1, iproc), sum_assigned_ls(iproc), &
-                                  mpi_double_precision, iproc - 1, 0, mpi_comm_world, istatus, ierr)
-                    call mpi_recv(buf_particles_flat(1, iproc), &
-                                  sum_assigned_ls(iproc)*ndim, mpi_double_precision, iproc - 1, 1, &
-                                  mpi_comm_world, istatus, ierr)
-                end do
-                do iparticle = 1, sum_assigned_ls(1)
-                    buf_likelihood(iparticle, 1) = work_likelihood_ls(iparticle)
-                    do idim = 1, ndim
-                        buf_particles_flat((iparticle - 1)*ndim + idim, 1) = &
-                            work_particles_new(idim, iparticle)
-                    end do
-                end do
-                cnt = 1
-                do iproc = 1, numprocs
-                    do iparticle = 1, sum_assigned_ls(iproc)
-                        likelihood_ls(cnt) = buf_likelihood(iparticle, iproc)
-                        do idim = 1, ndim
-                            particles(idim, cnt) = &
-                                buf_particles_flat((iparticle - 1)*ndim + idim, iproc)
-                        end do
-                        cnt = cnt + 1
-                    end do
-                end do
-            else
-                call mpi_send(work_likelihood_ls, sum_assigned, mpi_double_precision, 0, 0, &
-                              mpi_comm_world, ierr)
-                call mpi_send(work_particles_new, sum_assigned*ndim, mpi_double_precision, &
-                              0, 1, mpi_comm_world, ierr)
-            end if
+
+            call mpi_gatherv(work_likelihood_ls, sum_assigned, mpi_double_precision, &
+                             likelihood_ls, sum_assigned_ls, displs, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
+            do iproc = 1, numprocs
+                sum_assigned_ls(iproc) = sum_assigned_ls(iproc)*ndim
+                displs(iproc) = displs(iproc)*ndim
+            end do
+            displs(numprocs + 1) = displs(numprocs + 1)*ndim
+            call mpi_gatherv(work_particles_new, sum_assigned*ndim, mpi_double_precision, &
+                             particles, sum_assigned_ls, displs, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
 
             if (myid == 0) then
                 ! output result of stage 0(disabled)
@@ -765,33 +745,7 @@ contains
             !     call mpi_finalize(ierr)
             !     stop
             ! end if
-!     if (myid == 0) {
-!     en_time = MPI_Wtime()
-!     printf("3part time: %f\n", en_time - st_time)
-!     }
-!     }
         end do
 
-!     ////calculate mean and covariance of the samples
-!     //if(myid == 0) {
-!     //std::vector < double > weights_fin(nparticle, 1./nparticle)
-!     //std::vector < double > mean =
-!     //calc_mean_particles(particles_flat, weights_fin, nparticle,
-!     //ndim)
-!     //std::vector < double > cov_flat = calc_cov_particles(
-!     //particles_flat, weights_fin, mean, nparticle, ndim)
-!     //}
-!     //if(myid == 0) {
-!     //free(likelihood_ls)
-!     //free(assigned_num)
-!     //}
-!     //free(work_particles_flat)
-!     //free(work_init_likelihood)
-!     //free(particle_cur)
-!     //free(particle_cand)
-!     //free(cov_flat)
-!     //free(work_assigned_num)
-!     return
-!     }
     end subroutine fault_smc_exec
 end module smc_fault

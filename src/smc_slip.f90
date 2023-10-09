@@ -102,7 +102,7 @@ contains
                                nparticle, ndim, lmat_index(:, :)
         double precision, intent(inout) ::  particles(:, :), &
             likelihood_ls(:), prior_ls(:), particle_cur(:), gsvec(:), lsvec(:)
-        integer :: iparticle, idim, jdim
+        integer :: iparticle, idim, jdim, cnt
         double precision :: x, fx, f1, f0
         double precision :: y_i, y_prev, err
         double precision :: v1, v2  ! box muller
@@ -142,11 +142,13 @@ contains
                 y_i = mu_i
                 err = 1d0
                 y_prev = y_i + err
-                do while (err > 1d-8)
+                cnt = 0
+                do while (err > 1d-8 .and. cnt < 100)
                     y_i = y_i - (cdf_norm(y_i, mu_i, sigma2_i) - ((f1 - f0)*fx + f0))/ &
                           pdf_norm(y_i, mu_i, sigma2_i)
                     err = abs(y_i - y_prev)
                     y_prev = y_i
+                    cnt = cnt + 1
                 end do
                 particle_cur(idim) = y_i
             end do
@@ -429,15 +431,15 @@ contains
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
                     !   non negative constraints
-                    particle_cand(idim) = max(0d0, particle_cand(idim))
-                    ! if (particle_cand(idim) < 0d0) then
-                    !     particle_cand(idim) = -particle_cand(idim)
-                    ! end if
+                    ! particle_cand(idim) = max(0d0, particle_cand(idim))
+                    if (particle_cand(idim) < 0d0) then
+                        particle_cand(idim) = -particle_cand(idim)
+                    end if
                     !   max slip constraints
-                    particle_cand(idim) = min(max_slip, particle_cand(idim))
-                    ! if (particle_cand(idim) > max_slip) then
-                    !     particle_cand(idim) = 2*max_slip - particle_cand(idim)
-                    ! end if
+                    ! particle_cand(idim) = min(max_slip, particle_cand(idim))
+                    if (particle_cand(idim) > max_slip) then
+                        particle_cand(idim) = 2*max_slip - particle_cand(idim)
+                    end if
                 end do
 
                 ! calculate negative log likelihood/prior/posterior
