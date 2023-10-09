@@ -87,7 +87,7 @@ program main
     call random_seed(put=seed)
 
     ! generate output directory
-    output_dir = "output_1000_1000_test/"
+    output_dir = "output/"
 
     command = "mkdir -p "
     command = trim(command)//" "//output_dir
@@ -103,8 +103,8 @@ program main
     ndof = (nxi - 1)*(neta - 1)
 
     ! number of samples
-    nparticle_slip = 1000
-    nparticle_fault = 1000
+    nparticle_slip = 100000
+    nparticle_fault = 48000
 
     ! constrain max value for slip
     max_slip = 3d0
@@ -235,53 +235,53 @@ program main
     ! end do
 
     ! calculate likelihood for given fault
-    ! allocate (particle(ndim_fault))
-    ! allocate (tmp(ndim_fault + 1))
-    ! do i = 1, ndim_fault
-    !     particle(i) = 0d0
-    ! end do
-    ! do i = 1, ndim_fault + 1
-    !     tmp(i) = 0d0
-    ! end do
-    ! open (10, file="output_20000_20000_max100/26.csv", status='old')
-    ! do i = 1, nparticle_fault
-    !     read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    !         tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    !     do j = 1, ndim_fault
-    !         particle(j) = particle(j) + tmp(j)
-    !     end do
-    ! end do
+    allocate (particle(ndim_fault))
+    allocate (tmp(ndim_fault + 1))
+    do i = 1, ndim_fault
+        particle(i) = 0d0
+    end do
+    do i = 1, ndim_fault + 1
+        tmp(i) = 0d0
+    end do
+    open (10, file="output_200000_48000/25.csv", status='old')
+    do i = 1, nparticle_fault
+        read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+            tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+        do j = 1, ndim_fault
+            particle(j) = particle(j) + tmp(j)
+        end do
+    end do
+    close (10)
+    do j = 1, ndim_fault
+        particle(j) = particle(j)/nparticle_fault
+    end do
+    print *, particle
+    ! particle(:) = (/8.587707, -4.485232, -22.583390, 12.771108, 57.633782, &
+    !                 -1.846341, 0.966436, 1.428768, 36.731036, 6.393948/)
+    ! particle(:) = (/4.99413389000000, -9.81891359000000, -15.1300002400000, &
+    !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
+    !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
+    !                 19.7599089800000/)
+    st_time = omp_get_wtime()
+    neglog = fault_calc_likelihood( &
+             particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+             coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+             lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+             obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
+             xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+             uobs, uret, slip_particles, slip_particles_new, &
+             nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
+             slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
+             slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+             slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+             slip_particle_cand, slip_st_rand, 1, &
+             "output/slip_from_mean_fault_100000")
+    en_time = omp_get_wtime()
+    print *, "etime: ", en_time - st_time
+    print *, "neglog: ", neglog
+    ! open (10, file="visualize/mean_faultsize.dat", status='replace')
+    ! write (10, "(f12.5)") particle(9), particle(10)
     ! close (10)
-    ! do j = 1, ndim_fault
-    !     particle(j) = particle(j)/nparticle_fault
-    ! end do
-    ! print *, particle
-    ! ! particle(:) = (/8.587707, -4.485232, -22.583390, 12.771108, 57.633782, &
-    ! !                 -1.846341, 0.966436, 1.428768, 36.731036, 6.393948/)
-    ! ! particle(:) = (/4.99413389000000, -9.81891359000000, -15.1300002400000, &
-    ! !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
-    ! !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
-    ! !                 19.7599089800000/)
-    ! st_time = omp_get_wtime()
-    ! neglog = fault_calc_likelihood( &
-    !          particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-    !          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-    !          lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
-    !          obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
-    !          xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
-    !          uobs, uret, slip_particles, slip_particles_new, &
-    !          nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
-    !          slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
-    !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
-    !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-    !          slip_particle_cand, slip_st_rand, 1, &
-    !          "visualize/slip_from_mean_fault_max100.dat")
-    ! en_time = omp_get_wtime()
-    ! print *, "etime: ", en_time - st_time
-    ! print *, "neglog: ", neglog
-    ! ! open (10, file="visualize/mean_faultsize.dat", status='replace')
-    ! ! write (10, "(f12.5)") particle(9), particle(10)
-    ! ! close (10)
     ! open (10, file="visualize/mean_fault_max100.dat", status='replace')
     ! do i = 1, ndim_fault
     !     write (10, *) particle(i)
@@ -305,23 +305,23 @@ program main
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
 
-    allocate (range(2, ndim_fault))
-    range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-                            -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
-                          (/2, ndim_fault/))
-    call fault_smc_exec( &
-        output_dir, range, nparticle_fault, ndim_fault, &
-        myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-        coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-        lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
-        obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
-        xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
-        response_dist, uobs, uret, slip_particles, &
-        slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
-        lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
-        slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
-        slip_st_rand, slip_particle_cur, slip_particle_cand, &
-        slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
-    call mpi_finalize(ierr)
+    ! allocate (range(2, ndim_fault))
+    ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
+    !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    !                       (/2, ndim_fault/))
+    ! call fault_smc_exec( &
+    !     output_dir, range, nparticle_fault, ndim_fault, &
+    !     myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+    !     lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+    !     obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
+    !     xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
+    !     response_dist, uobs, uret, slip_particles, &
+    !     slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
+    !     lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
+    !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+    !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
+    !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
+    ! call mpi_finalize(ierr)
 
 end program main
