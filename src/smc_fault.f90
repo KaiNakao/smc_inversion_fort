@@ -716,11 +716,13 @@ contains
             call mpi_gatherv(work_likelihood_ls, sum_assigned, mpi_double_precision, &
                              likelihood_ls, sum_assigned_ls, displs, mpi_double_precision, &
                              0, mpi_comm_world, ierr)
-            do iproc = 1, numprocs
-                sum_assigned_ls(iproc) = sum_assigned_ls(iproc)*ndim
-                displs(iproc) = displs(iproc)*ndim
-            end do
-            displs(numprocs + 1) = displs(numprocs + 1)*ndim
+            if (myid == 0) then
+                do iproc = 1, numprocs
+                    sum_assigned_ls(iproc) = sum_assigned_ls(iproc)*ndim
+                    displs(iproc) = displs(iproc)*ndim
+                end do
+                displs(numprocs + 1) = displs(numprocs + 1)*ndim
+            end if
             call mpi_gatherv(work_particles_new, sum_assigned*ndim, mpi_double_precision, &
                              particles, sum_assigned_ls, displs, mpi_double_precision, &
                              0, mpi_comm_world, ierr)
