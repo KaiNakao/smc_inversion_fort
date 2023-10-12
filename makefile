@@ -1,14 +1,14 @@
 # fugaku
-# COMPILER_F90 = mpifrtpx
-# COMPILER_CPP = mpiFCCpx
-# FLAGS_F90   = -Kfast,openmp -SSL2
-# FLAGS_CPP   = -Kfast,openmp -SSL2
+COMPILER_F90 = mpifrtpx
+COMPILER_CPP = mpiFCCpx
+FLAGS_F90   = -Kfast,openmp -SSL2
+FLAGS_CPP   = -Kfast,openmp -SSL2
 
 # ibis
-COMPILER_F90 = mpiifort -fc=ifx
-COMPILER_CPP = mpiicpc -cxx=icpx 
-FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
-FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
+# COMPILER_F90 = mpiifort -fc=ifx
+# COMPILER_CPP = mpiicpc -cxx=icpx 
+# FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
+# FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
 # for debug 
 # FLAGS_F90   = -g -fopenmp -check all -traceback -qmkl -lmpi -fp-model=precise
 # FLAGS_CPP   = -g -fopenmp -qmkl -lmpi -fp-model=precise
