@@ -114,7 +114,10 @@ program main
     ndim_slip = 2*ndof
 
     ! read observation data
-    observation_path = "input/observation_toy2.csv"
+    ! synthetic test
+    ! observation_path = "input/observation_toy2.csv"
+    ! real observation data
+    observation_path = "input/observation_with_gnss_reduced.csv"
     if (myid == 0) then
         call read_observation1(observation_path, nobs)
     end if
@@ -256,6 +259,7 @@ program main
     !     particle(j) = particle(j)/nparticle_fault
     ! end do
     ! print *, particle
+
     ! particle(:) = (/8.587707, -4.485232, -22.583390, 12.771108, 57.633782, &
     !                 -1.846341, 0.966436, 1.428768, 36.731036, 6.393948/)
     ! particle(:) = (/4.99413389000000, -9.81891359000000, -15.1300002400000, &
@@ -274,40 +278,21 @@ program main
     !          slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
     !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
     !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-    !          slip_particle_cand, slip_st_rand, 1, &
-    !          "output/slip_from_mean_fault_200000")
-    ! en_time = omp_get_wtime()
-    ! print *, "etime: ", en_time - st_time
-    ! print *, "neglog: ", neglog
-    ! open (10, file="visualize/mean_faultsize.dat", status='replace')
-    ! write (10, "(f12.5)") particle(9), particle(10)
-    ! close (10)
-    ! open (10, file="visualize/mean_fault_max100.dat", status='replace')
-    ! do i = 1, ndim_fault
-    !     write (10, *) particle(i)
-    ! end do
-    ! close (10)
-
-    ! st_time = omp_get_wtime()
-    ! neglog = fault_calc_likelihood( &
-    !          particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-    !          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-    !          lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
-    !          obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
-    !          xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
-    !          uobs, uret, slip_particles, slip_particles_new, &
-    !          nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
-    !          slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
-    !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
-    !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
     !          slip_particle_cand, slip_st_rand, 0, "")
     ! en_time = omp_get_wtime()
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
 
+    ! smc for fault
     allocate (range(2, ndim_fault))
-    range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-                            -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    ! range of uniform prior distribution P(theta)
+    ! synthetic test
+    ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
+    !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    !                       (/2, ndim_fault/))
+    ! real observation data
+    range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
+                            -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
                           (/2, ndim_fault/))
     call fault_smc_exec( &
         output_dir, range, nparticle_fault, ndim_fault, &
