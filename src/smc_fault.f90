@@ -579,7 +579,7 @@ contains
             allocate (likelihood_ls(nparticle))
             allocate (assigned_num(nparticle))
             allocate (sorted_idx(nparticle))
-            allocate (tmp_particles(nparticle, nparticle))
+            allocate (tmp_particles(ndim, nparticle))
             allocate (tmp_assigned_num(nparticle))
         else
             allocate (particles(1, 1))
