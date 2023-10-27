@@ -87,7 +87,7 @@ program main
     call random_seed(put=seed)
 
     ! generate output directory
-    output_dir = "output_200000_96000/"
+    output_dir = "output_200000_192000/"
 
     command = "mkdir -p "
     command = trim(command)//" "//output_dir
@@ -104,7 +104,7 @@ program main
 
     ! number of samples
     nparticle_slip = 200000
-    nparticle_fault = 96000
+    nparticle_fault = 192000
 
     ! constrain max value for slip
     max_slip = 3d0
@@ -191,7 +191,7 @@ program main
     ! allocate (svec(2*ndof))
 
     ! allocate (particle(ndim_fault))
-    ! open (10, file="visualize/mean_fault_max100.dat", status='old')
+    ! open (10, file="visualize/mean_fault.dat", status='old')
     ! do i = 1, ndim_fault
     !     read (10, *) particle(i)
     !     print *, i, particle(i)
@@ -203,7 +203,7 @@ program main
     ! leta = particle(10)
     ! call discretize_fault(lxi, leta, nxi, neta, cny_fault, coor_fault, &
     !                       node_to_elem_val, node_to_elem_size, id_dof)
-    ! open (10, file="visualize/mean_slip_max100.dat", status='old')
+    ! open (10, file="visualize/mean_slip.dat", status='old')
     ! do i = 1, nnode
     !     read (10, *) slip(1, i), slip(2, i)
     !     print *, i, slip(1, i), slip(2, i)
@@ -232,7 +232,7 @@ program main
 
     ! call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
     !            nobs, svec, 1, 0d0, gsvec, 1)
-    ! open (10, file="visualize/dvec_est_max100.dat", status='replace')
+    ! open (10, file="visualize/dvec_est.dat", status='replace')
     ! do i = 1, nobs
     !     write (10, *), gsvec(i)
     ! end do
@@ -246,7 +246,7 @@ program main
     ! do i = 1, ndim_fault + 1
     !     tmp(i) = 0d0
     ! end do
-    ! open (10, file="output_200000_48000/25.csv", status='old')
+    ! open (10, file="output_200000_192000_iburi/23.csv", status='old')
     ! do i = 1, nparticle_fault
     !     read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
     !         tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
@@ -259,13 +259,12 @@ program main
     !     particle(j) = particle(j)/nparticle_fault
     ! end do
     ! print *, particle
+    ! open (10, file="visualize/mean_fault.dat", status="replace")
+    ! do i = 1, ndim_fault
+    !     write (10, *) particle(i)
+    ! end do
+    ! close (10)
 
-    ! particle(:) = (/8.587707, -4.485232, -22.583390, 12.771108, 57.633782, &
-    !                 -1.846341, 0.966436, 1.428768, 36.731036, 6.393948/)
-    ! particle(:) = (/4.99413389000000, -9.81891359000000, -15.1300002400000, &
-    !                 0.872903704999999, 59.5438755200000, -6.545940000000001E-002, &
-    !                 0.350170955000000, -3.43126560500001, 31.6602526250000, &
-    !                 19.7599089800000/)
     ! st_time = omp_get_wtime()
     ! neglog = fault_calc_likelihood( &
     !          particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
@@ -278,35 +277,138 @@ program main
     !          slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
     !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
     !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-    !          slip_particle_cand, slip_st_rand, 0, "")
+    !          slip_particle_cand, slip_st_rand, 1, "visualize/slip_from_mean_fault.dat")
     ! en_time = omp_get_wtime()
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
 
-    ! smc for fault
-    allocate (range(2, ndim_fault))
-    ! range of uniform prior distribution P(theta)
-    ! synthetic test
-    ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-    !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    call calc_slip_map("output_200000_192000_iburi/23.csv")
+
+    ! ! smc for fault
+    ! allocate (range(2, ndim_fault))
+    ! ! range of uniform prior distribution P(theta)
+    ! ! synthetic test
+    ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
+    ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    ! !                       (/2, ndim_fault/))
+    ! ! real observation data
+    ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
+    !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
     !                       (/2, ndim_fault/))
-    ! real observation data
-    range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
-                            -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
-                          (/2, ndim_fault/))
-    call fault_smc_exec( &
-        output_dir, range, nparticle_fault, ndim_fault, &
-        myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-        coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-        lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
-        obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
-        xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
-        response_dist, uobs, uret, slip_particles, &
-        slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
-        lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
-        slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
-        slip_st_rand, slip_particle_cur, slip_particle_cand, &
-        slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
+    ! call fault_smc_exec( &
+    !     output_dir, range, nparticle_fault, ndim_fault, &
+    !     myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+    !     lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+    !     obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
+    !     xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
+    !     response_dist, uobs, uret, slip_particles, &
+    !     slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
+    !     lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
+    !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+    !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
+    !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
     call mpi_finalize(ierr)
 
+contains
+    subroutine calc_slip_map(fault_filepath)
+        implicit none
+        character(*), intent(in) :: fault_filepath
+        character(len=100) :: slip_filepath
+        double precision, allocatable :: fault_particles(:, :), &
+            work_fault_particles(:, :), mean_slip(:, :), &
+            work_mean_slip(:, :), particle_slip(:)
+        integer :: work_size, k, inode, idirection, iparticle, idim, idof
+
+        slip_filepath = "output_200000_192000_iburi/mapslip.dat"
+        allocate (slip(2, nnode))
+        allocate (particle_slip(ndim_slip))
+        if (myid == 0) then
+            allocate (fault_particles(ndim_fault, nparticle_fault))
+            allocate (mean_slip(ndim_slip, nparticle_fault))
+            allocate (tmp(ndim_fault + 1))
+            open (10, file=fault_filepath, status='old')
+            do i = 1, nparticle_fault
+                read (10, *) tmp
+                do j = 1, ndim_fault
+                    fault_particles(j, i) = tmp(j)
+                end do
+            end do
+            close (10)
+        else
+            allocate (fault_particles(1, 1))
+            allocate (mean_slip(1, 1))
+        end if
+
+        work_size = nparticle_fault/numprocs
+        allocate (work_fault_particles(ndim_fault, work_size))
+        allocate (work_mean_slip(ndim_slip, work_size))
+        call mpi_scatter(fault_particles, work_size*ndim_fault, &
+                         mpi_double_precision, work_fault_particles, work_size*ndim_fault, &
+                         mpi_double_precision, 0, mpi_comm_world, ierr)
+
+        allocate (particle(ndim_fault))
+        do i = 1, work_size
+            do j = 1, ndim_fault
+                particle(j) = work_fault_particles(j, i)
+            end do
+
+            neglog = fault_calc_likelihood( &
+                     particle, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+                     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+                     lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+                     obs_unitvec, obs_sigma, sigma2_full, target_id_val, node_id_in_patch, &
+                     xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+                     uobs, uret, slip_particles, slip_particles_new, &
+                     nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
+                     slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
+                     slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+                     slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+                     slip_particle_cand, slip_st_rand, 0, "")
+
+            print *, "ID: ", work_size*myid + i
+            do j = 1, ndim_slip
+                work_mean_slip(j, i) = 0d0
+            end do
+            do k = 1, nparticle_slip
+                do j = 1, ndim_slip
+                    work_mean_slip(j, i) = &
+                        work_mean_slip(j, i) + slip_particles(j, k)
+                end do
+            end do
+            do j = 1, ndim_slip
+                work_mean_slip(j, i) = work_mean_slip(j, i)/nparticle_slip
+            end do
+        end do
+
+        call mpi_gather(work_mean_slip, ndim_slip*work_size, &
+                        mpi_double_precision, mean_slip, ndim_slip*work_size, &
+                        mpi_double_precision, 0, mpi_comm_world, ierr)
+
+        if (myid == 0) then
+            open (17, file=slip_filepath, status='replace')
+            do iparticle = 1, nparticle_fault
+                do inode = 1, nnode
+                    do idirection = 1, 2
+                        slip(idirection, inode) = 0d0
+                    end do
+                end do
+                do idim = 1, ndim_slip
+                    particle_slip(idim) = mean_slip(idim, iparticle)
+                end do
+                do idof = 1, ndof
+                    inode = id_dof(idof)
+                    slip(1, inode) = particle_slip(2*(idof - 1) + 1)
+                    slip(2, inode) = particle_slip(2*(idof - 1) + 2)
+                end do
+                do inode = 1, nnode
+                    do idirection = 1, 2
+                        write (17, "(f12.5)", advance="no") slip(idirection, inode)
+                    end do
+                end do
+                write (17, *)
+            end do
+            close (17)
+        end if
+    end subroutine
 end program main
