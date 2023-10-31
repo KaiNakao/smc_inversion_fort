@@ -104,7 +104,7 @@ program main
 
     ! number of samples
     nparticle_slip = 200000
-    nparticle_fault = 192000
+    nparticle_fault = 20000
 
     ! constrain max value for slip
     max_slip = 3d0
@@ -282,7 +282,9 @@ program main
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
 
-    call calc_slip_map("output_200000_192000_iburi/23.csv")
+    call calc_slip_map("var_faultsize_max3/23_converted.csv")
+    ! call point_cloud("var_faultsize_max3/23_converted.csv", &
+    !                  "var_faultsize_max3/mapslip.dat")
 
     ! ! smc for fault
     ! allocate (range(2, ndim_fault))
@@ -320,7 +322,7 @@ contains
             work_mean_slip(:, :), particle_slip(:)
         integer :: work_size, k, inode, idirection, iparticle, idim, idof
 
-        slip_filepath = "output_200000_192000_iburi/mapslip.dat"
+        slip_filepath = "var_faultsize_max3/mapslip.dat"
         allocate (slip(2, nnode))
         allocate (particle_slip(ndim_slip))
         if (myid == 0) then
@@ -410,5 +412,214 @@ contains
             end do
             close (17)
         end if
-    end subroutine
+    end subroutine calc_slip_map
+
+    subroutine point_cloud(fault_filepath, slip_filepath)
+        implicit none
+        character(*), intent(in) :: fault_filepath, slip_filepath
+        character(len=200) :: points_filepath
+        double precision, allocatable :: fault_particles(:, :), mean_slip(:, :), &
+            points(:, :)
+        double precision :: M_PI, dip_rad, strike_rad, r1, r2, xi, eta, uxi, ueta, &
+            x, y, z
+        integer :: ie, iparticle, idim, inode, ir1, ir2, jnode, idpoint, cnt, stride
+
+        stride = 5
+        points_filepath = "var_faultsize_max3/points.dat"
+        allocate (fault_particles(ndim_fault, nparticle_fault))
+        ! x, y, z, uxi, ueta, unorm
+        allocate (points(6, nparticle_fault*npatch*4))
+        allocate (mean_slip(2*nnode, nparticle_fault))
+        allocate (tmp(ndim_fault + 1))
+        allocate (particle(ndim_fault))
+        allocate (svec(ndim_slip))
+        open (10, file=fault_filepath, status='old')
+        open (11, file=slip_filepath, status='old')
+        do i = 1, nparticle_fault
+            read (10, *) tmp
+            read (11, *) mean_slip(:, i)
+            do j = 1, ndim_fault
+                fault_particles(j, i) = tmp(j)
+            end do
+        end do
+        close (10)
+        close (11)
+
+        cnt = 1
+        do iparticle = 1, nparticle_fault, stride
+            slip_dist = reshape(mean_slip(:, iparticle), (/2, nnode/))
+            do idim = 1, ndim_fault
+                particle(idim) = fault_particles(idim, iparticle)
+            end do
+            xf = particle(1)
+            yf = particle(2)
+            zf = particle(3)
+            strike = particle(4)
+            dip = particle(5)
+            log_sigma_sar2 = particle(6)
+            log_sigma_gnss2 = particle(7)
+            log_alpha2 = particle(8)
+            lxi = particle(9)
+            leta = particle(10)
+
+            call discretize_fault(lxi, leta, nxi, neta, cny_fault, coor_fault, &
+                                  node_to_elem_val, node_to_elem_size, id_dof)
+
+            M_PI = 2d0*asin(1d0)
+            dip_rad = dip/180d0*M_PI
+            strike_rad = strike/180d0*M_PI
+            r1vec(1) = -0.5d0
+            r1vec(2) = 0.5d0
+            r2vec(1) = -0.5d0
+            r2vec(2) = 0.5d0
+            ! loop for patchs
+            do ie = 1, npatch
+                do inode = 1, 4
+                    node_id_in_patch(inode) = cny_fault(inode, ie)
+                end do
+
+                do inode = 1, 4
+                    jnode = node_id_in_patch(inode)
+                    xinode(inode) = coor_fault(1, jnode)
+                    etanode(inode) = coor_fault(2, jnode)
+                    uxinode(inode) = slip_dist(1, jnode)
+                    uetanode(inode) = slip_dist(2, jnode)
+                end do
+
+                !   loop for point sources
+                do ir1 = 1, 2
+                    r1 = r1vec(ir1)
+                    do ir2 = 1, 2
+                        r2 = r2vec(ir2)
+                        !   interpolate(xi, eta, uxi, ueta) by shape functions
+                        nvec(1) = (1d0 - r1)*(1d0 - r2)/4d0
+                        nvec(2) = (1d0 + r1)*(1d0 - r2)/4d0
+                        nvec(3) = (1d0 + r1)*(1d0 + r2)/4d0
+                        nvec(4) = (1d0 - r1)*(1d0 + r2)/4d0
+                        xi = 0d0
+                        eta = 0d0
+                        uxi = 0d0
+                        ueta = 0d0
+                        !   for(inode=0 inode < 4 inode + +) {
+                        do inode = 1, 4
+                            xi = xi + nvec(inode)*xinode(inode)
+                            eta = eta + nvec(inode)*etanode(inode)
+                            uxi = uxi + nvec(inode)*uxinode(inode)
+                            ueta = ueta + nvec(inode)*uetanode(inode)
+                        end do
+
+                        !   location of the point source specified by
+                        !   global coordinates(x, y, z)
+                        x = xf - eta*cos(dip_rad)*cos(strike_rad) + &
+                            xi*sin(strike_rad)
+                        y = yf + eta*cos(dip_rad)*sin(strike_rad) + &
+                            xi*cos(strike_rad)
+                        z = zf + eta*sin(dip_rad)
+                        idpoint = (cnt - 1)*npatch*4 + (ie - 1)*4 + (ir1 - 1)*2 + ir2
+                        points(1, idpoint) = x
+                        points(2, idpoint) = y
+                        points(3, idpoint) = z
+                        points(4, idpoint) = uxi
+                        points(5, idpoint) = ueta
+                        points(6, idpoint) = sqrt(uxi**2 + ueta**2)
+                    end do
+                end do
+            end do
+            cnt = cnt + 1
+        end do
+
+        open (10, file=points_filepath, status='replace')
+        do i = 1, nparticle_fault*npatch*4/stride
+            do j = 1, 6
+                write (10, "(f12.5)", advance="no") points(j, i)
+            end do
+            write (10, *)
+        end do
+        close (10)
+    end subroutine point_cloud
+
+    ! subroutine point_cloud(fault_filepath, slip_filepath)
+    !     implicit none
+    !     character(*), intent(in) :: fault_filepath, slip_filepath
+    !     character(len=200) :: points_filepath
+    !     double precision, allocatable :: fault_particles(:, :), mean_slip(:, :), &
+    !         points(:, :)
+    !     double precision :: M_PI, dip_rad, strike_rad, r1, r2, xi, eta, uxi, ueta, &
+    !         x, y, z
+    !     integer :: ie, iparticle, idim, inode, ir1, ir2, jnode, idpoint, cnt, stride
+
+    !     stride = 10
+    !     points_filepath = "output_200000_192000_iburi/points.dat"
+    !     allocate (fault_particles(ndim_fault, nparticle_fault))
+    !     ! x, y, z, uxi, ueta, unorm
+    !     allocate (points(6, nparticle_fault*nnode))
+    !     allocate (mean_slip(2*nnode, nparticle_fault))
+    !     allocate (tmp(ndim_fault + 1))
+    !     allocate (particle(ndim_fault))
+    !     open (10, file=fault_filepath, status='old')
+    !     open (11, file=slip_filepath, status='old')
+    !     do i = 1, nparticle_fault
+    !         read (10, *) tmp
+    !         do j = 1, ndim_fault
+    !             fault_particles(j, i) = tmp(j)
+    !         end do
+    !         read (11, *) mean_slip(:, i)
+    !     end do
+    !     close (10)
+    !     close (11)
+
+    !     cnt = 1
+    !     do iparticle = 1, nparticle_fault, stride
+    !         slip_dist = reshape(mean_slip(:, iparticle), (/2, nnode/))
+    !         do idim = 1, ndim_fault
+    !             particle(idim) = fault_particles(idim, iparticle)
+    !         end do
+    !         xf = particle(1)
+    !         yf = particle(2)
+    !         zf = particle(3)
+    !         strike = particle(4)
+    !         dip = particle(5)
+    !         log_sigma_sar2 = particle(6)
+    !         log_sigma_gnss2 = particle(7)
+    !         log_alpha2 = particle(8)
+    !         lxi = particle(9)
+    !         leta = particle(10)
+
+    !         call discretize_fault(lxi, leta, nxi, neta, cny_fault, coor_fault, &
+    !                               node_to_elem_val, node_to_elem_size, id_dof)
+
+    !         M_PI = 2d0*asin(1d0)
+    !         dip_rad = dip/180d0*M_PI
+    !         strike_rad = strike/180d0*M_PI
+    !         ! loop for nodes
+    !         do inode = 1, nnode
+    !             xi = coor_fault(1, inode)
+    !             eta = coor_fault(2, inode)
+    !             uxi = slip_dist(1, inode)
+    !             ueta = slip_dist(2, inode)
+    !             x = xf - eta*cos(dip_rad)*cos(strike_rad) + &
+    !                 xi*sin(strike_rad)
+    !             y = yf + eta*cos(dip_rad)*sin(strike_rad) + &
+    !                 xi*cos(strike_rad)
+    !             z = zf + eta*sin(dip_rad)
+    !             idpoint = (cnt - 1)*nnode + inode
+    !             points(1, idpoint) = x
+    !             points(2, idpoint) = y
+    !             points(3, idpoint) = z
+    !             points(4, idpoint) = uxi
+    !             points(5, idpoint) = ueta
+    !             points(6, idpoint) = sqrt(uxi**2 + ueta**2)
+    !         end do
+    !         cnt = cnt + 1
+    !     end do
+
+    !     open (10, file=points_filepath, status='replace')
+    !     do i = 1, nparticle_fault*nnode/stride
+    !         do j = 1, 6
+    !             write (10, "(f12.5)", advance="no") points(j, i)
+    !         end do
+    !         write (10, *)
+    !     end do
+    !     close (10)
+    ! end subroutine point_cloud
 end program main
