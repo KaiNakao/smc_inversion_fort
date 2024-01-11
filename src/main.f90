@@ -6,6 +6,8 @@ program main
     use smc_fault
     implicit none
     integer :: i, j
+    ! number of fault planes
+    integer :: nplane
     ! number of samples
     integer :: nparticle_slip, nparticle_fault
     ! number of patches
@@ -86,12 +88,38 @@ program main
     end do
     call random_seed(put=seed)
 
-    ! generate output directory
-    output_dir = "output_2000_2000/"
+    ! read settings
+    if (myid == 0) then
+        open (17, file="data/setting.dat", status="old")
+        read (17, *) ! number of fault planes
+        read (17, *) nplane
+        read (17, *)
+        read (17, *) ! number of samples for fault
+        read (17, *) nparticle_fault
+        read (17, *) ! number of samples for slip
+        read (17, *) nparticle_slip
+        read (17, *)
+        read (17, *) ! observation path
+        read (17, "(a)") observation_path
+        read (17, *) ! output directory path
+        read (17, "(a)") output_dir
+        close (17)
+        print *, "nplane: ", nplane
+        print *, "nparticle_fault: ", nparticle_fault
+        print *, "nparticle_slip: ", nparticle_slip
+        print *, "observation_path: ", observation_path
+        print *, "output_dir: ", output_dir
+    end if
+    call mpi_bcast(nplane, 1, mpi_integer, 0, mpi_comm_world, ierr)
+    call mpi_bcast(nparticle_fault, 1, mpi_integer, 0, mpi_comm_world, ierr)
+    call mpi_bcast(nparticle_slip, 1, mpi_integer, 0, mpi_comm_world, ierr)
 
-    command = "mkdir -p "
-    command = trim(command)//" "//output_dir
-    call system(command)
+    ! generate output directory
+    if (myid == 0) then
+        command = "mkdir -p "
+        command = trim(command)//" "//output_dir
+        call system(command)
+    end if
 
     ! number of patches
     nxi = 6
@@ -101,10 +129,6 @@ program main
     npatch = nxi*neta
     nnode = (nxi + 1)*(neta + 1)
     ndof = (nxi - 1)*(neta - 1)
-
-    ! number of samples
-    nparticle_slip = 2000
-    nparticle_fault = 2000
 
     ! constrain max value for slip
     max_slip = 3d0
@@ -117,7 +141,7 @@ program main
     ! synthetic test
     ! observation_path = "input/observation_toy2.csv"
     ! real observation data
-    observation_path = "input/observation_with_gnss_reduced.csv"
+    ! observation_path = "input/observation_with_gnss_reduced.csv"
     if (myid == 0) then
         call read_observation1(observation_path, nobs)
     end if
