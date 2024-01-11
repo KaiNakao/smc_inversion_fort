@@ -216,16 +216,16 @@ contains
     end subroutine calc_mean_std_vector
 
     subroutine fault_find_next_gamma(gamma, gamma_prev, likelihood_ls, &
-                                     weights, nparticle)
+                                     weights, nparticle, fault_evidence)
         implicit none
 
-        double precision, intent(inout) :: gamma
+        double precision, intent(inout) :: gamma, fault_evidence
         double precision, intent(in) :: gamma_prev
         double precision, intent(in) :: likelihood_ls(:)
         double precision, intent(inout) :: weights(:)
         integer, intent(in) :: nparticle
         integer :: iparticle
-        double precision :: min_likelihood, likelihood, cv_threshold
+        double precision :: min_likelihood, likelihood, cv_threshold, evidence_tmp
         double precision :: lower, upper, err
         double precision :: diff_gamma, mean, std, cv
         cv_threshold = 5d-1
@@ -261,6 +261,16 @@ contains
                 exit
             end if
         end do
+        ! Calulate S_j(mean of the weight)
+        evidence_tmp = 0d0
+        diff_gamma = gamma - gamma_prev
+        do iparticle = 1, nparticle
+            likelihood = likelihood_ls(iparticle)
+            evidence_tmp = evidence_tmp + exp(-diff_gamma*(likelihood - min_likelihood))
+        end do
+        evidence_tmp = evidence_tmp/nparticle
+        fault_evidence = fault_evidence - log(evidence_tmp) + diff_gamma*min_likelihood
+
     end subroutine fault_find_next_gamma
 
     subroutine fault_normalize_weights(weights, nparticle)
@@ -390,9 +400,6 @@ contains
             sorted_idx(iparticle) = iparticle
         end do
         call qsort(assigned_num, sorted_idx, nparticle)
-        do iparticle = 1, nparticle
-            print *, assigned_num(sorted_idx(iparticle))
-        end do
         do iproc = 1, numprocs
             do iparticle = 1, work_size
                 id_org = sorted_idx((iparticle - 1)*numprocs + iproc)
@@ -544,7 +551,7 @@ contains
         character(*), intent(in) :: output_dir
         integer :: work_size, iparticle, iproc, idim, sum_assigned, cnt, iter
         character(len=100) :: iter_char, filename
-        double precision :: gamma, gamma_prev
+        double precision :: gamma, gamma_prev, fault_evidence
         double precision, allocatable :: particles(:, :)
         ! array for only the master process
         integer, allocatable :: sum_assigned_ls(:), displs(:)
@@ -632,18 +639,18 @@ contains
                 do idim = 1, ndim
                     write (17, "(f12.5)", advance="no") particles(idim, iparticle)
                 end do
-                print *, likelihood_ls(iparticle)
                 write (17, "(f12.5)") likelihood_ls(iparticle)
             end do
             close (17)
         end if
         iter = iter + 1
         gamma = 0d0
+        fault_evidence = 0d0
         do while (1.-gamma > 10d0**(-8d0))
             if (myid == 0) then
                 ! find the gamma such that c.o.v of weights = 0.5
                 gamma_prev = gamma
-                call fault_find_next_gamma(gamma, gamma_prev, likelihood_ls, weights, nparticle)
+                call fault_find_next_gamma(gamma, gamma_prev, likelihood_ls, weights, nparticle, fault_evidence)
                 print *, "gamma: ", gamma
                 ! normalize weights(sum of weights needs to be 1)
                 call fault_normalize_weights(weights, nparticle)
@@ -748,6 +755,9 @@ contains
             !     stop
             ! end if
         end do
+        if (myid == 0) then
+            print *, "negative log of model evidence: ", fault_evidence
+        end if
 
     end subroutine fault_smc_exec
 end module smc_fault
