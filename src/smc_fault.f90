@@ -73,11 +73,22 @@ contains
         zf = particle(3)
         strike = particle(4)
         dip = particle(5)
-        log_sigma_sar2 = particle(6)
-        log_sigma_gnss2 = particle(7)
+        lxi = particle(6)
+        leta = particle(7)
         log_alpha2 = particle(8)
-        lxi = particle(9)
-        leta = particle(10)
+        log_sigma_sar2 = particle(9)
+        log_sigma_gnss2 = particle(10)
+
+        ! xf = particle(1)
+        ! yf = particle(2)
+        ! zf = particle(3)
+        ! strike = particle(4)
+        ! dip = particle(5)
+        ! log_sigma_sar2 = particle(6)
+        ! log_sigma_gnss2 = particle(7)
+        ! log_alpha2 = particle(8)
+        ! lxi = particle(9)
+        ! leta = particle(10)
 
         ! set fault geometry
         call discretize_fault(lxi, leta, nxi, neta, cny_fault, coor_fault, &
@@ -338,13 +349,13 @@ contains
 
         write (*, "(a)", advance="no") "mean: "
         do idim = 1, ndim
-            write (*, "(f12.5)", advance="no") mean(idim)
+            write (*, "(f20.5)", advance="no") mean(idim)
         end do
         write (*, *)
 
         write (*, "(a)", advance="no") "cov: "
         do idim = 1, ndim
-            write (*, "(f12.5)", advance="no") cov(idim, idim)
+            write (*, "(f20.5)", advance="no") cov(idim, idim)
         end do
         write (*, *)
 
@@ -637,9 +648,9 @@ contains
             open (17, file=filename, status='replace')
             do iparticle = 1, nparticle
                 do idim = 1, ndim
-                    write (17, "(f12.5)", advance="no") particles(idim, iparticle)
+                    write (17, "(f20.5)", advance="no") particles(idim, iparticle)
                 end do
-                write (17, "(f12.5)") likelihood_ls(iparticle)
+                write (17, "(f20.5)") likelihood_ls(iparticle)
             end do
             close (17)
         end if
@@ -742,9 +753,9 @@ contains
                 open (17, file=filename, status='replace')
                 do iparticle = 1, nparticle
                     do idim = 1, ndim
-                        write (17, "(f12.5)", advance="no") particles(idim, iparticle)
+                        write (17, "(f20.5)", advance="no") particles(idim, iparticle)
                     end do
-                    write (17, "(f12.5)") likelihood_ls(iparticle)
+                    write (17, "(f20.5)") likelihood_ls(iparticle)
                 end do
                 close (17)
             end if
