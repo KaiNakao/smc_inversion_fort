@@ -109,6 +109,9 @@ program main
         print *, "nparticle_slip: ", nparticle_slip
         print *, "observation_path: ", observation_path
         print *, "output_dir: ", output_dir
+        if (mod(nparticle_fault, numprocs) /= 0) then
+            print *, "invalid number of MPI processes"
+        end if
     end if
     call mpi_bcast(nplane, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(nparticle_fault, 1, mpi_integer, 0, mpi_comm_world, ierr)
@@ -313,14 +316,28 @@ program main
     ! smc for fault
     allocate (range(2, ndim_fault))
     ! range of uniform prior distribution P(theta)
-    ! synthetic test
-    ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-    !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    ! ! synthetic test
+    ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
+    ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    ! !                       (/2, ndim_fault/))
+    ! ! real observation data
+    ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
+    !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
     !                       (/2, ndim_fault/))
-    ! real observation data
-    range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
-                            -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
-                          (/2, ndim_fault/))
+
+    ! read prior range of theta
+    if (myid == 0) then
+        open (17, file="data/range.dat", status="old")
+        read (17, *) ! --------fault 1
+        do i = 1, ndim_fault
+            read (17, *) ! param
+            read (17, *) range(1, i), range(2, i)
+        end do
+        close (17)
+    end if
+    call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
+                   mpi_comm_world, ierr)
+
     call fault_smc_exec( &
         output_dir, range, nparticle_fault, ndim_fault, &
         myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
