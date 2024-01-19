@@ -43,63 +43,65 @@ contains
         integer, intent(in) :: nsar, ngnss, nobs, ndof
         double precision, intent(inout) :: gsvec(:)
         integer :: i
-        double precision :: delta_loss
+
         do i = 1, nobs
             gsvec(i) = 0d0
         end do
-        !  // double st_time, en_time
-        !  // st_time = MPI_Wtime()
         call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
                    nobs, svec, 1, 0d0, gsvec, 1)
-        !  // en_time = MPI_Wtime() printf("dgemv etime: %f\n", en_time - st_time)
 
-        delta_loss = 0
+        slip_calc_likelihood = nsar*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
         do i = 1, nobs
-            delta_loss = delta_loss + (dvec(i) - gsvec(i))**2d0/(2d0*sigma2_full(i))
+            slip_calc_likelihood = slip_calc_likelihood + &
+                                   (dvec(i) - gsvec(i))**2d0/(2d0*sigma2_full(i))
         end do
-        slip_calc_likelihood = &
-            nsar*log_sigma_sar2/2d0 + 3d0*ngnss/2d0*log_sigma_gnss2 + delta_loss
-
     end function slip_calc_likelihood
 
-    double precision function slip_calc_prior(svec, log_alpha2, &
+    double precision function slip_calc_prior(svec, alpha2_full, theta, nplane, nxi, neta, &
                                               lmat_index, lmat_val, lsvec, nnode)
         implicit none
-        double precision, intent(in) :: svec(:), log_alpha2, lmat_val(:, :)
-        integer, intent(in) :: lmat_index(:, :), nnode
+        double precision, intent(in) :: svec(:), alpha2_full(:), &
+            lmat_val(:, :), theta(:)
+        integer, intent(in) :: lmat_index(:, :), nnode, nplane, nxi, neta
         double precision, intent(inout) :: lsvec(:)
         integer :: n, i, j
-        double precision :: prior
+        double precision :: tmp, log_alpha2
         n = 2*nnode
 
         do i = 1, n
             lsvec(i) = 0d0
         end do
-
         do i = 1, n
+            tmp = 0d0
             do j = 1, 5
-                lsvec(i) = lsvec(i) + lmat_val(j, i)*svec(lmat_index(j, i))
+                tmp = tmp + lmat_val(j, i)*svec(lmat_index(j, i))
             end do
+            lsvec(i) = tmp
         end do
 
-        prior = 0d0
-        do i = 1, n
-            prior = prior + lsvec(i)**2d0/(2d0*exp(log_alpha2))
+        slip_calc_prior = 0d0
+        do i = 1, nplane
+            log_alpha2 = theta(8*i)
+            slip_calc_prior = slip_calc_prior + &
+                              2d0*(nxi + 1)*(neta + 1)*log_alpha2/2d0
         end do
-        slip_calc_prior = prior
+        do i = 1, n
+            slip_calc_prior = slip_calc_prior + lsvec(i)**2d0/(2d0*alpha2_full(i))
+        end do
     end function slip_calc_prior
 
     subroutine slip_gen_init_particles(particles, likelihood_ls, prior_ls, nparticle, &
-                                       ndim, llmat, log_alpha2, max_slip, dvec, &
-                                       sigma2_full, gmat, log_sigma_sar2, &
+                                       ndim, llmat, max_slip, dvec, &
+                                       sigma2_full, alpha2_full, theta, nplane, nxi, neta, &
+                                       gmat, log_sigma_sar2, &
                                        log_sigma_gnss2, nsar, ngnss, nobs, ndof, &
                                        lmat_index, lmat_val, nnode, particle_cur, gsvec, lsvec)
         implicit none
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), llmat(:, :), gmat(:, :), sigma2_full(:), &
-            log_alpha2, log_sigma_sar2, log_sigma_gnss2
+            alpha2_full(:), log_sigma_sar2, log_sigma_gnss2, theta(:)
         integer, intent(in) :: nnode, ndof, nsar, ngnss, nobs, &
-                               nparticle, ndim, lmat_index(:, :)
+                               nparticle, ndim, lmat_index(:, :), nplane, nxi, neta
         double precision, intent(inout) ::  particles(:, :), &
             likelihood_ls(:), prior_ls(:), particle_cur(:), gsvec(:), lsvec(:)
         integer :: iparticle, idim, jdim, cnt
@@ -118,15 +120,15 @@ contains
             do idim = 1, ndim
                 !  mean and variance for conditional probability distribution
                 sigma2_i = &
-                    (llmat(idim, idim)/exp(log_alpha2))**(-1d0)
+                    (llmat(idim, idim)/alpha2_full(idim))**(-1d0)
                 mu_i = 0d0
                 ! loop for (jdim != idim)
                 do jdim = 1, idim - 1
-                    mu_i = mu_i - llmat(idim, jdim)/exp(log_alpha2)* &
+                    mu_i = mu_i - llmat(idim, jdim)/alpha2_full(idim)* &
                            particle_cur(jdim)*sigma2_i
                 end do
                 do jdim = idim + 1, ndim
-                    mu_i = mu_i - llmat(idim, jdim)/exp(log_alpha2)* &
+                    mu_i = mu_i - llmat(idim, jdim)/alpha2_full(idim)* &
                            particle_cur(jdim)*sigma2_i
                 end do
 
@@ -167,7 +169,7 @@ contains
                 slip_calc_likelihood(particle_cur, dvec, sigma2_full, &
                                      gmat, log_sigma_sar2, log_sigma_gnss2, &
                                      nsar, ngnss, gsvec, nobs, ndof)
-            prior_ls(iparticle) = slip_calc_prior(particle_cur, log_alpha2, &
+            prior_ls(iparticle) = slip_calc_prior(particle_cur, alpha2_full, theta, nplane, nxi, neta, &
                                                   lmat_index, lmat_val, lsvec, nnode)
         end do
 !$omp end parallel do
@@ -215,7 +217,7 @@ contains
         end do
 !$omp end parallel do
 
-        cv_threshold = 5d-1
+        cv_threshold = 1d0
         ! binary search for the next gamma
         ! such that c.o.v of the weight is equivalent to cv_threashold
         lower = gamma_prev
@@ -317,8 +319,6 @@ contains
             end do
         end do
 
-        ! double st_time, en_time
-        ! st_time = omp_get_wtime()
 !$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
 !$omp reduction(+:cov)
         do iparticle = 1, nparticle
@@ -332,7 +332,6 @@ contains
             end do
         end do
 !$omp end parallel do
-        ! en_time = omp_get_wtime()
         do jdim = 1, ndim
             do idim = jdim, ndim
                 cov(idim, jdim) = cov(idim, jdim)*0.04d0
@@ -366,16 +365,17 @@ contains
     subroutine slip_mcmc_sampling(gamma, particles, particles_new, &
                                   likelihood_ls, likelihood_ls_new, prior_ls, &
                                   prior_ls_new, cov, assigned_num, id_start, &
-                                  nparticle, ndim, dvec, sigma2_full, &
+                                  nparticle, ndim, dvec, sigma2_full, alpha2_full, &
+                                  theta, nplane, nxi, neta, &
                                   gmat, log_sigma_sar2, log_sigma_gnss2, nsar, &
-                                  ngnss, nobs, ndof, log_alpha2, lmat_index, lmat_val, &
+                                  ngnss, nobs, ndof, lmat_index, lmat_val, &
                                   nnode, max_slip, st_rand_ls, metropolis_ls, &
                                   particle_cur, particle_cand, st_rand, gsvec, lsvec)
         implicit none
         double precision, intent(in) :: max_slip, dvec(:), &
-            lmat_val(:, :), gmat(:, :), sigma2_full(:), &
-            log_alpha2, log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :)
-        integer, intent(in) :: nnode, ndof, nsar, ngnss, nobs, &
+            lmat_val(:, :), gmat(:, :), sigma2_full(:), alpha2_full(:), theta(:), &
+            log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :)
+        integer, intent(in) :: nnode, ndof, nsar, ngnss, nobs, nplane, nxi, neta, &
                                nparticle, ndim, lmat_index(:, :), assigned_num(:)
         double precision, intent(inout) ::  particles(:, :), &
             particles_new(:, :), likelihood_ls(:), &
@@ -399,7 +399,6 @@ contains
         end do
 
         id_start(1) = 1
-        !  for (iparticle = 0 iparticle < nparticle - 1 iparticle++) {
         do iparticle = 1, nparticle - 1
             id_start(iparticle + 1) = id_start(iparticle) + assigned_num(iparticle)
         end do
@@ -427,7 +426,6 @@ contains
                     st_rand(idim) = st_rand_ls(idim, jparticle)
                 end do
                 call dtrmv('l', 'n', 'n', ndim, cov, ndim, st_rand, 1)
-                ! for (idim = 0 idim < ndim idim++) {
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
                     !   non negative constraints
@@ -448,8 +446,8 @@ contains
                                   particle_cand, dvec, sigma2_full, gmat, &
                                   log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, &
                                   gsvec, nobs, ndof)
-                prior_cand = slip_calc_prior(particle_cand, log_alpha2, lmat_index, &
-                                             lmat_val, lsvec, nnode)
+                prior_cand = slip_calc_prior(particle_cand, alpha2_full, theta, nplane, nxi, neta, &
+                                             lmat_index, lmat_val, lsvec, nnode)
                 post_cand = gamma*likelihood_cand + prior_cand
 
                 !  metropolis test
@@ -491,8 +489,9 @@ contains
     subroutine slip_smc_exec(particles, particles_new, &
                              nparticle, ndim, flag_output, &
                              output_path, llmat, &
-                             log_alpha2, max_slip, dvec, &
-                             sigma2_full, gmat, &
+                             max_slip, dvec, &
+                             sigma2_full, alpha2_full, theta, nplane, &
+                             nxi, neta, gmat, &
                              log_sigma_sar2, log_sigma_gnss2, nsar, &
                              ngnss, nobs, ndof, lmat_index, &
                              lmat_val, nnode, likelihood_ls, &
@@ -503,12 +502,12 @@ contains
                              gsvec, lsvec, particle_cur, particle_cand, &
                              st_rand, neglog_ret)
         implicit none
-        double precision, intent(in) :: max_slip, dvec(:), &
-            lmat_val(:, :), llmat(:, :), gmat(:, :), sigma2_full(:), &
-            log_alpha2, log_sigma_sar2, log_sigma_gnss2
-        integer, intent(in) :: nnode, ndof, nsar, ngnss, nobs, &
+        double precision, intent(in) ::  max_slip, dvec(:), &
+            lmat_val(:, :), llmat(:, :), gmat(:, :), sigma2_full(:), alpha2_full(:), &
+            log_sigma_sar2, log_sigma_gnss2, theta(:)
+        integer, intent(in) :: nplane, nnode, ndof, nsar, ngnss, nobs, &
                                nparticle, ndim, flag_output, id_dof(:), &
-                               lmat_index(:, :)
+                               lmat_index(:, :), nxi, neta
         character(*), intent(in) :: output_path
         double precision, intent(inout) ::  particles(:, :), &
             particles_new(:, :), likelihood_ls(:), &
@@ -525,8 +524,9 @@ contains
 
         ! sampling from the prior distribution
         call slip_gen_init_particles(particles, likelihood_ls, prior_ls, nparticle, &
-                                     ndim, llmat, log_alpha2, max_slip, dvec, &
-                                     sigma2_full, gmat, log_sigma_sar2, &
+                                     ndim, llmat, max_slip, dvec, &
+                                     sigma2_full, alpha2_full, theta, nplane, nxi, neta, &
+                                     gmat, log_sigma_sar2, &
                                      log_sigma_gnss2, nsar, ngnss, nobs, ndof, &
                                      lmat_index, lmat_val, nnode, particle_cur, gsvec, lsvec)
         ! output result of stage 0(disabled)
@@ -551,7 +551,7 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
-
+            print *, "gamma", gamma
             neglog_ret = neglog_ret + neglog_evidence
 
             ! normalize weights(sum of weights needs to be 1)
@@ -566,9 +566,10 @@ contains
             call slip_mcmc_sampling(gamma, particles, particles_new, &
                                     likelihood_ls, likelihood_ls_new, prior_ls, &
                                     prior_ls_new, cov, assigned_num, id_start, &
-                                    nparticle, ndim, dvec, sigma2_full, &
+                                    nparticle, ndim, dvec, sigma2_full, alpha2_full, &
+                                    theta, nplane, nxi, neta, &
                                     gmat, log_sigma_sar2, log_sigma_gnss2, nsar, &
-                                    ngnss, nobs, ndof, log_alpha2, lmat_index, lmat_val, &
+                                    ngnss, nobs, ndof, lmat_index, lmat_val, &
                                     nnode, max_slip, st_rand_ls, metropolis_ls, &
                                     particle_cur, particle_cand, st_rand, gsvec, lsvec)
             ! output result of stage 0(disabled)
@@ -589,31 +590,25 @@ contains
         if (flag_output == 1) then
             allocate (slip(2, nnode))
             open (17, file=output_path, status='replace')
-            ! for(i=0 i < 2*nnode i + +) {
             do inode = 1, nnode
                 do idirection = 1, 2
                     slip(idirection, inode) = 0d0
                 end do
             end do
-            ! for(iparticle=0 iparticle < nparticle iparticle + +) {
             do iparticle = 1, nparticle
-                ! for(idim=0 idim < ndim idim + +) {
                 do idim = 1, ndim
                     particle_cur(idim) = particles(idim, iparticle)
                 end do
-                ! for(idof=0 idof < ndof idof + +) {
                 do idof = 1, ndof
                     inode = id_dof(idof)
                     slip(1, inode) = particle_cur(2*(idof - 1) + 1)
                     slip(2, inode) = particle_cur(2*(idof - 1) + 2)
                 end do
-                ! for(i=0 i < 2*nnode i + +) {
                 do inode = 1, nnode
                     do idirection = 1, 2
                         write (17, "(f12.5)", advance="no") slip(idirection, inode)
                     end do
                 end do
-                ! fprintf(fp, "%f ", likelihood_ls(iparticle) + prior_ls(iparticle))
                 write (17, "(f12.5)") likelihood_ls(iparticle) + prior_ls(iparticle)
             end do
             close (17)
