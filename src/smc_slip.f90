@@ -217,7 +217,7 @@ contains
         end do
 !$omp end parallel do
 
-        cv_threshold = 1d0
+        cv_threshold = 5d-1
         ! binary search for the next gamma
         ! such that c.o.v of the weight is equivalent to cv_threashold
         lower = gamma_prev
@@ -517,7 +517,7 @@ contains
             particle_cur(:), particle_cand(:), st_rand(:), neglog_ret
         integer, intent(inout) ::  assigned_num(:), id_start(:)
         integer :: iparticle, idim, idof, inode, idirection
-        integer :: iter
+        integer :: iter, iiter
         double precision :: gamma, neglog_evidence
         double precision, allocatable :: slip(:, :)
         iter = 0
@@ -546,6 +546,7 @@ contains
         ! product of S_j (sum for negative log value)
         neglog_ret = 0d0
         do while (1d0 - gamma > 10d-8)
+            ! do iiter = 1, 10
             ! S_j
 
             ! find the gamma such that c.o.v of weights = 0.5
