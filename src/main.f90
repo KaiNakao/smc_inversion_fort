@@ -45,8 +45,8 @@ program main
 
     ! laplacian
     double precision, allocatable :: luni(:, :), lmat(:, :), &
-        lmat_val(:, :), llmat(:, :)
-    integer, allocatable :: lmat_index(:, :)
+        lmat_val(:, :), llmat(:, :), ltmat_val(:, :)
+    integer, allocatable :: lmat_index(:, :), ltmat_index(:, :)
 
     ! SMC for slip
     double precision, allocatable :: slip_particles(:, :), &
@@ -188,6 +188,8 @@ program main
     allocate (lmat(2*nnode, 2*ndof))
     allocate (lmat_index(5, 2*nnode))
     allocate (lmat_val(5, 2*nnode))
+    allocate (ltmat_index(5, 2*ndof))
+    allocate (ltmat_val(5, 2*ndof))
     allocate (llmat(2*ndof, 2*ndof))
 
     ! SMC for slip
@@ -298,7 +300,7 @@ program main
     neglog = fault_calc_likelihood( &
              particle, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
              coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-             lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+             lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
              obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
              xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
              uobs, uret, slip_particles, slip_particles_new, &

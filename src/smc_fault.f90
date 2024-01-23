@@ -29,7 +29,7 @@ contains
         theta, nplane, nxi, neta, nnode, ndof, nsar, &
         ngnss, nobs, cny_fault, coor_fault, &
         node_to_elem_val, node_to_elem_size, id_dof, luni, &
-        lmat, lmat_index, lmat_val, llmat, &
+        lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, &
         gmat, slip_dist, obs_points, &
         obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
         target_id_val, node_id_in_patch, xinode, etanode, &
@@ -50,7 +50,7 @@ contains
                                nparticle_slip, flag_output, nplane
         character(*), intent(in) :: output_path
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
-            lmat(:, :), lmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
+            lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
             sigma2_full(:), alpha2_full(:), xinode(:), etanode(:), uxinode(:), uetanode(:), &
             r1vec(:), r2vec(:), nvec(:), response_dist(:, :), uobs(:), uret(:), &
             slip_particles(:, :), slip_particles_new(:, :), slip_likelihood_ls(:), &
@@ -60,7 +60,7 @@ contains
             slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), &
                                   node_to_elem_size(:), id_dof(:), &
-                                  lmat_index(:, :), target_id_val(:), &
+                                  lmat_index(:, :), ltmat_index(:, :), target_id_val(:), &
                                   node_id_in_patch(:), slip_assigned_num(:), &
                                   slip_id_start(:)
         integer :: i, j, ierr
@@ -97,7 +97,8 @@ contains
         call gen_laplacian(theta, nplane, nnode, nxi, neta, id_dof, ndof, luni, lmat)
 
         ! sparse matrix form of lmat
-        call gen_sparse_lmat(lmat, lmat_index, lmat_val, nnode, ndof)
+        call gen_sparse_lmat(lmat, lmat_index, lmat_val, ltmat_index, &
+                             ltmat_val, nnode, ndof)
         ! matrix L^T L
         call calc_ll(llmat, lmat, nnode, ndof)
 
@@ -138,7 +139,7 @@ contains
             slip_particles, slip_particles_new, nparticle_slip, 2*ndof, &
             flag_output, output_path, llmat, max_slip, dvec, sigma2_full, &
             alpha2_full, theta, nplane, nxi, neta, gmat, log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, nobs, ndof, &
-            lmat_index, lmat_val, nnode, slip_likelihood_ls, slip_prior_ls, &
+            lmat_index, lmat_val, ltmat_index, ltmat_val, nnode, slip_likelihood_ls, slip_prior_ls, &
             slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
             slip_prior_ls_new, slip_assigned_num, slip_id_start, id_dof, &
             slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
@@ -149,7 +150,7 @@ contains
     subroutine work_eval_init_particles(work_size, nplane, ndim, particle_cur, &
                                         work_particles, work_likelihood_ls, nxi, neta, nnode, ndof, nsar, ngnss, nobs, &
                                         cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
-                                        id_dof, luni, lmat, lmat_index, lmat_val, llmat, gmat, &
+                                        id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                         slip_dist, obs_points, obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
                                         target_id_val, node_id_in_patch, xinode, etanode, uxinode, &
                                         uetanode, r1vec, r2vec, nvec, response_dist, uobs, uret, &
@@ -164,10 +165,10 @@ contains
         double precision, intent(in) :: work_particles(:, :), obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
-                                  id_dof(:), lmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
+                                  id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
                                   slip_assigned_num(:), slip_id_start(:)
         double precision, intent(inout) :: work_likelihood_ls(:), particle_cur(:), coor_fault(:, :), luni(:, :), lmat(:, :), &
-            lmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), sigma2_full(:), alpha2_full(:), xinode(:), &
+            lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), sigma2_full(:), alpha2_full(:), xinode(:), &
             etanode(:), uxinode(:), uetanode(:), r1vec(:), r2vec(:), nvec(:), response_dist(:, :), &
             uobs(:), uret(:), slip_particles(:, :), slip_particles_new(:, :), &
             slip_likelihood_ls(:), slip_prior_ls(:), slip_weights(:), slip_mean(:), slip_cov(:, :), &
@@ -183,7 +184,7 @@ contains
             likelihood = fault_calc_likelihood( &
                          particle_cur, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
                          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-                         lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+                         lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                          obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
                          xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
                          uobs, uret, slip_particles, slip_particles_new, &
@@ -437,7 +438,7 @@ contains
                                   cov, gamma, myid, nxi, neta, nnode, ndof, &
                                   nsar, ngnss, nobs, cny_fault, coor_fault, &
                                   node_to_elem_val, node_to_elem_size, id_dof, &
-                                  luni, lmat, lmat_index, lmat_val, llmat, gmat, &
+                                  luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                   slip_dist, obs_points, obs_unitvec, obs_sigma, &
                                   sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
                                   xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
@@ -454,11 +455,11 @@ contains
         double precision, intent(in) :: work_particles(:, :), cov(:, :), gamma, obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
-                                  id_dof(:), lmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
+                                  id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
                                   slip_assigned_num(:), slip_id_start(:)
         double precision, intent(inout) :: work_particles_new(:, :), work_likelihood_ls(:), &
             particle_cur(:), particle_cand(:), st_rand(:), coor_fault(:, :), luni(:, :), &
-            lmat(:, :), lmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), sigma2_full(:), alpha2_full(:), &
+            lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), sigma2_full(:), alpha2_full(:), &
             xinode(:), etanode(:), uxinode(:), uetanode(:), r1vec(:), r2vec(:), nvec(:), response_dist(:, :), &
             uobs(:), uret(:), slip_particles(:, :), slip_particles_new(:, :), slip_likelihood_ls(:), &
             slip_prior_ls(:), slip_weights(:), slip_mean(:), slip_cov(:, :), slip_likelihood_ls_new(:), &
@@ -478,7 +479,7 @@ contains
                 likelihood_cur = fault_calc_likelihood( &
                                  particle_cur, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
                                  coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-                                 lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+                                 lmat_index, lmat_val, lmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                                  obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
                                  target_id_val, node_id_in_patch, &
                                  xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
@@ -502,7 +503,7 @@ contains
                 likelihood_cand = fault_calc_likelihood( &
                                   particle_cand, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
                                   coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-                                  lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+                                  lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                                   obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
                                   xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
                                   uobs, uret, slip_particles, slip_particles_new, &
@@ -536,7 +537,7 @@ contains
         output_dir, range, nplane, nparticle, ndim, &
         myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
         coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-        lmat_index, lmat_val, llmat, gmat, slip_dist, obs_points, &
+        lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
         obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
         xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
         response_dist, uobs, uret, slip_particles, &
@@ -552,7 +553,7 @@ contains
                                nparticle_slip, nparticle, ndim, &
                                myid, numprocs
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
-            lmat(:, :), lmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
+            lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
             sigma2_full(:), alpha2_full(:), xinode(:), etanode(:), uxinode(:), uetanode(:), &
             r1vec(:), r2vec(:), nvec(:), response_dist(:, :), uobs(:), uret(:), &
             slip_particles(:, :), slip_particles_new(:, :), slip_likelihood_ls(:), &
@@ -562,7 +563,7 @@ contains
             slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), &
                                   node_to_elem_size(:), id_dof(:), &
-                                  lmat_index(:, :), target_id_val(:), &
+                                  lmat_index(:, :), ltmat_index(:, :), target_id_val(:), &
                                   node_id_in_patch(:), slip_assigned_num(:), &
                                   slip_id_start(:)
         character(*), intent(in) :: output_dir
@@ -633,7 +634,7 @@ contains
         call work_eval_init_particles(work_size, nplane, ndim, particle_cur, &
                                       work_particles, work_likelihood_ls, nxi, neta, nnode, ndof, nsar, ngnss, nobs, &
                                       cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
-                                      id_dof, luni, lmat, lmat_index, lmat_val, llmat, gmat, &
+                                      id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                       slip_dist, obs_points, obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
                                       target_id_val, node_id_in_patch, xinode, etanode, uxinode, &
                                       uetanode, r1vec, r2vec, nvec, response_dist, uobs, uret, &
@@ -720,7 +721,7 @@ contains
                                     cov, gamma, myid, nxi, neta, nnode, ndof, &
                                     nsar, ngnss, nobs, cny_fault, coor_fault, &
                                     node_to_elem_val, node_to_elem_size, id_dof, &
-                                    luni, lmat, lmat_index, lmat_val, llmat, gmat, &
+                                    luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                     slip_dist, obs_points, obs_unitvec, obs_sigma, &
                                     sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
                                     xinode, etanode, uxinode, uetanode, r1vec, r2vec, &

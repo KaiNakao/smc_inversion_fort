@@ -222,14 +222,17 @@ contains
         end do
     end subroutine
 
-    subroutine gen_sparse_lmat(lmat, lmat_index, lmat_val, nnode, ndof)
+    subroutine gen_sparse_lmat(lmat, lmat_index, lmat_val, ltmat_index, &
+                               ltmat_val, nnode, ndof)
         implicit none
         integer, intent(in) :: nnode, ndof
         double precision, intent(in) :: lmat(:, :)
-        integer, intent(inout) :: lmat_index(:, :)
-        double precision, intent(inout) :: lmat_val(:, :)
+        integer, intent(inout) :: lmat_index(:, :), ltmat_index(:, :)
+        double precision, intent(inout) :: lmat_val(:, :), ltmat_val(:, :)
         integer ::  i, j, cnt
         double precision :: val
+
+        ! sparse matrix of L
         do i = 1, 2*nnode
             cnt = 0
             do j = 1, 2*ndof
@@ -244,6 +247,24 @@ contains
                 cnt = cnt + 1
                 lmat_index(cnt, i) = 1
                 lmat_val(cnt, i) = 0d0
+            end do
+        end do
+
+        ! sparse matrix of L^T
+        do i = 1, 2*ndof
+            cnt = 0
+            do j = 1, 2*nnode
+                val = lmat(j, i)
+                if (abs(val) > 1d-8) then
+                    cnt = cnt + 1
+                    ltmat_index(cnt, i) = j
+                    ltmat_val(cnt, i) = val
+                end if
+            end do
+            do while (cnt < 5)
+                cnt = cnt + 1
+                ltmat_index(cnt, i) = 1
+                ltmat_val(cnt, i) = 0d0
             end do
         end do
     end subroutine gen_sparse_lmat
