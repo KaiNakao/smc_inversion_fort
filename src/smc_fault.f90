@@ -14,6 +14,7 @@ contains
         double precision, intent(in) :: range(:, :)
         integer :: idim, iparticle
         double precision ::  x, xmin, xmax, randr
+        double precision :: tmp
         do iparticle = 1, nparticle
             do idim = 1, ndim
                 xmin = range(1, idim)
@@ -22,6 +23,11 @@ contains
                 x = xmin + randr*(xmax - xmin)
                 particles(idim, iparticle) = x
             end do
+            if (particles(2, iparticle) > particles(10, iparticle)) then
+                tmp = particles(2, iparticle)
+                particles(2, iparticle) = particles(10, iparticle)
+                particles(10, iparticle) = tmp
+            end if
         end do
     end subroutine fault_sample_init_particles
 
@@ -102,7 +108,7 @@ contains
         ! matrix L^T L
         call calc_ll(llmat, lmat, nnode, ndof)
         en_time = omp_get_wtime()
-        print *, "init :", en_time - st_time
+        ! print *, "init :", en_time - st_time
 
         st_time = omp_get_wtime()
         ! ! Calculate greens function for the sampled fault
@@ -112,7 +118,7 @@ contains
                               node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                               r1vec, r2vec, nvec, response_dist, uobs, uret)
         en_time = omp_get_wtime()
-        print *, "green's function :", en_time - st_time
+        ! print *, "green's function :", en_time - st_time
 
         ! diag component of sigma
         ! (variance matrix for likelihood function of slip)
@@ -152,7 +158,7 @@ contains
             slip_particle_cand, slip_st_rand, neglog_sum)
         fault_calc_likelihood = neglog_sum
         en_time = omp_get_wtime()
-        print *, "smc slip: ", en_time - st_time
+        ! print *, "smc slip: ", en_time - st_time
     end function fault_calc_likelihood
 
     subroutine work_eval_init_particles(work_size, nplane, ndim, particle_cur, &
@@ -522,7 +528,9 @@ contains
                                   slip_particle_cand, slip_st_rand, 0, "")
                 ! metropolis test and check domain of definition
                 call random_number(metropolis)
-                if (exp(gamma*(likelihood_cur - likelihood_cand)) > metropolis) then
+                ! if (exp(gamma*(likelihood_cur - likelihood_cand)) > metropolis) then
+                if ((exp(gamma*(likelihood_cur - likelihood_cand)) > metropolis) &
+                    .and. (particle_cand(2) < particle_cand(10))) then
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
                     end do

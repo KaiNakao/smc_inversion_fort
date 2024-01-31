@@ -222,7 +222,7 @@ contains
         end do
 !$omp end parallel do
         en_time = omp_get_wtime()
-        print *, "gibbs sampling: ", en_time - st_time
+        ! print *, "gibbs sampling: ", en_time - st_time
     end subroutine
 
     subroutine slip_calc_mean_std_vector(vec, size, mean, std)
@@ -517,7 +517,7 @@ contains
             id_start(iparticle + 1) = id_start(iparticle) + assigned_num(iparticle)
         end do
         en_time = omp_get_wtime()
-        print *, "time for un-parallelizable: ", en_time - st_time
+        ! print *, "time for un-parallelizable: ", en_time - st_time
 
 !$omp parallel do private(&
 !$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
@@ -624,7 +624,7 @@ contains
                 prior_ls_new(jparticle) = prior_cur
             end do
         end do
-        print *, "acpetance rate", acc_rate
+        ! print *, "acpetance rate", acc_rate
         !   update configurations
         do iparticle = 1, nparticle
             do idim = 1, ndim
@@ -832,7 +832,7 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
-            print *, "gamma", gamma
+            ! print *, "gamma", gamma
             neglog_ret = neglog_ret + neglog_evidence
 
             ! normalize weights(sum of weights needs to be 1)
@@ -865,8 +865,8 @@ contains
                                    nnode, max_slip, st_rand_ls, metropolis_ls, &
                                    particle_cur, particle_cand, st_rand, gsvec, lsvec)
             en_time1 = omp_get_wtime()
-            print *, "loop total: ", en_time1 - st_time1
-            print *, "hmc: ", en_time1 - st_time2
+            ! print *, "loop total: ", en_time1 - st_time1
+            ! print *, "hmc: ", en_time1 - st_time2
             ! output result of stage 0(disabled)
             ! write (iter_char, "(i0)") iter
             ! filename = trim(trim(output_dir)//trim(iter_char)//".csv")
