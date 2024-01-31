@@ -65,8 +65,7 @@ contains
                                   slip_id_start(:)
         integer :: i, j, ierr
         double precision :: log_sigma_sar2, log_sigma_gnss2, log_alpha2, neglog_sum
-        ! double precision :: xf, yf, zf, strike, dip, log_sigma_sar2, &
-        !     log_sigma_gnss2, log_alpha2, lxi, leta, dxi, deta, neglog_sum
+        double precision :: st_time, en_time
 
         ! xf = particle(1)
         ! yf = particle(2)
@@ -90,6 +89,7 @@ contains
         ! lxi = particle(9)
         ! leta = particle(10)
 
+        st_time = omp_get_wtime()
         ! set fault geometry
         call discretize_fault(theta, nplane, nxi, neta, cny_fault, coor_fault, &
                               node_to_elem_val, node_to_elem_size, id_dof)
@@ -101,13 +101,18 @@ contains
                              ltmat_val, nnode, ndof)
         ! matrix L^T L
         call calc_ll(llmat, lmat, nnode, ndof)
+        en_time = omp_get_wtime()
+        print *, "init :", en_time - st_time
 
+        st_time = omp_get_wtime()
         ! ! Calculate greens function for the sampled fault
         call calc_greens_func(theta, nplane, nxi, neta, gmat, slip_dist, cny_fault, coor_fault, obs_points, &
                               obs_unitvec, node_to_elem_val, node_to_elem_size, &
                               id_dof, nsar, ngnss, nobs, nnode, ndof, target_id_val, &
                               node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                               r1vec, r2vec, nvec, response_dist, uobs, uret)
+        en_time = omp_get_wtime()
+        print *, "green's function :", en_time - st_time
 
         ! diag component of sigma
         ! (variance matrix for likelihood function of slip)
@@ -133,6 +138,7 @@ contains
             end do
         end do
 
+        st_time = omp_get_wtime()
         ! Sequential Monte Carlo sampling for slip
         ! calculate negative log of likelihood
         call slip_smc_exec( &
@@ -145,6 +151,8 @@ contains
             slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
             slip_particle_cand, slip_st_rand, neglog_sum)
         fault_calc_likelihood = neglog_sum
+        en_time = omp_get_wtime()
+        print *, "smc slip: ", en_time - st_time
     end function fault_calc_likelihood
 
     subroutine work_eval_init_particles(work_size, nplane, ndim, particle_cur, &

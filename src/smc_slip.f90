@@ -155,7 +155,9 @@ contains
         double precision :: y_i, y_prev, err
         double precision :: v1, v2  ! box muller
         double precision :: sigma2_i, mu_i
+        double precision :: st_time, en_time
 
+        st_time = omp_get_wtime()
         do idim = 1, ndim
             particle_cur(idim) = 0d0
         end do
@@ -219,6 +221,8 @@ contains
                                                   lmat_index, lmat_val, lsvec, nnode)
         end do
 !$omp end parallel do
+        en_time = omp_get_wtime()
+        print *, "gibbs sampling: ", en_time - st_time
     end subroutine
 
     subroutine slip_calc_mean_std_vector(vec, size, mean, std)
@@ -365,30 +369,41 @@ contains
             end do
         end do
 
-!$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
-!$omp reduction(+:cov)
+! !$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
+! !$omp reduction(+:cov)
+!         do iparticle = 1, nparticle
+!             weight = weights(iparticle)
+!             do jdim = 1, ndim
+!                 dj = (particles(jdim, iparticle) - mean(jdim))
+!                 do idim = jdim, ndim
+!                     di = (particles(idim, iparticle) - mean(idim))
+!                     cov(idim, jdim) = cov(idim, jdim) + weight*di*dj
+!                 end do
+!             end do
+!         end do
+! !$omp end parallel do
+!         do idim = 1, ndim
+!             cov_diag(idim) = cov(idim, idim)
+!         end do
+!         do jdim = 1, ndim
+!             do idim = jdim, ndim
+!                 cov(idim, jdim) = cov(idim, jdim)*0.04d0
+!             end do
+!         end do
+
+!         ! LAPACK function for LU decomposition of matrix
+!         call dpotrf('L', ndim, cov, ndim, ierr)
+        cov_diag = 0d0
+!$omp parallel do private(iparticle, weight, idim, di) &
+!$omp reduction(+:cov_diag)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
-            do jdim = 1, ndim
-                dj = (particles(jdim, iparticle) - mean(jdim))
-                do idim = jdim, ndim
-                    di = (particles(idim, iparticle) - mean(idim))
-                    cov(idim, jdim) = cov(idim, jdim) + weight*di*dj
-                end do
+            do idim = 1, ndim
+                di = particles(idim, iparticle) - mean(idim)
+                cov_diag(idim) = cov_diag(idim) + weight*di*di
             end do
         end do
 !$omp end parallel do
-        do idim = 1, ndim
-            cov_diag(idim) = cov(idim, idim)
-        end do
-        do jdim = 1, ndim
-            do idim = jdim, ndim
-                cov(idim, jdim) = cov(idim, jdim)*0.04d0
-            end do
-        end do
-
-        ! LAPACK function for LU decomposition of matrix
-        call dpotrf('L', ndim, cov, ndim, ierr)
         return
     end subroutine slip_calc_cov_particles
 
@@ -446,6 +461,9 @@ contains
         double precision :: acc_rate, gamma_tmp, delta
         integer :: itau, ntau
 
+        ! timer
+        double precision :: st_time, en_time
+
         ! ! ~~~~~~~~~~~~~~~
         ! ! check gradient
         ! ! ~~~~~~~~~~~~~~~
@@ -484,6 +502,7 @@ contains
         ntau = 5
         dtau = 1d-1
 
+        st_time = omp_get_wtime()
         do iparticle = 1, nparticle
             do idim = 1, ndim
                 call slip_BoxMuller(v1, v2)
@@ -497,7 +516,14 @@ contains
         do iparticle = 1, nparticle - 1
             id_start(iparticle + 1) = id_start(iparticle) + assigned_num(iparticle)
         end do
+        en_time = omp_get_wtime()
+        print *, "time for un-parallelizable: ", en_time - st_time
 
+!$omp parallel do private(&
+!$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
+!$omp prior_cur, post_cur, jparticle, particle_cand, st_rand, pvec, &
+!$omp ham_cur, itau, grad, gsvec, lsvec, likelihood_cand, prior_cand, &
+!$omp post_cand, ham_cand, metropolis) reduction(+:acc_rate)
         ! hamiltonian monte carlo
         do iparticle = 1, nparticle
             istart = id_start(iparticle)
@@ -798,9 +824,9 @@ contains
         ! product of S_j (sum for negative log value)
         neglog_ret = 0d0
 
-        do while (1d0 - gamma > 10d-8)
+        ! do while (1d0 - gamma > 10d-8)
+        do iiter = 1, 10
             st_time1 = omp_get_wtime()
-            ! do iiter = 1, 10
             ! S_j
 
             ! find the gamma such that c.o.v of weights = 0.5
@@ -839,8 +865,8 @@ contains
                                    nnode, max_slip, st_rand_ls, metropolis_ls, &
                                    particle_cur, particle_cand, st_rand, gsvec, lsvec)
             en_time1 = omp_get_wtime()
-            ! print *, "loop total: ", en_time1 - st_time1
-            ! print *, "mcmc: ", en_time1 - st_time2
+            print *, "loop total: ", en_time1 - st_time1
+            print *, "hmc: ", en_time1 - st_time2
             ! output result of stage 0(disabled)
             ! write (iter_char, "(i0)") iter
             ! filename = trim(trim(output_dir)//trim(iter_char)//".csv")

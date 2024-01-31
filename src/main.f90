@@ -286,13 +286,13 @@ program main
     ! end do
     ! close (10)
 
-    open (10, file="/home/nakao/smc_inversion_fort/input/synthetic_2fault_with_sar/theta.dat", &
-          status="old")
-    do i = 1, ndim_fault
-        read (10, *) particle(i)
-    end do
-    close (10)
-    ! particle = (/5d0, 0d0, -25d0, 0d0, 60d0, 60d0, 30d0, -5d0, 0d0, 0d0/)
+    ! open (10, file="/home/nakao/smc_inversion_fort/input/synthetic_2fault_with_sar/theta.dat", &
+    !       status="old")
+    ! do i = 1, ndim_fault
+    !     read (10, *) particle(i)
+    ! end do
+    ! close (10)
+    particle = (/5d0, 0d0, -25d0, 0d0, 60d0, 60d0, 30d0, -5d0, 0d0, 0d0/)
     print *, particle
 
     st_time = omp_get_wtime()
@@ -308,7 +308,7 @@ program main
              slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
              slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
              slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-             slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat")
+             slip_particle_cand, slip_st_rand, 0, "output/mcmc/slip_from_mean_fault.dat")
     en_time = omp_get_wtime()
     print *, "etime: ", en_time - st_time
     print *, "neglog: ", neglog
