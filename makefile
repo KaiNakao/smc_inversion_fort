@@ -10,7 +10,7 @@ COMPILER_CPP = mpiicpc -cxx=icpx
 FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise -module ./mod
 FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
 # for debug 
-# FLAGS_F90   = -g -fopenmp -check all -traceback -qmkl -lmpi -fp-model=precise -module ./mod
+# FLAGS_F90   = -g -fopenmp -check all -traceback -qmkl -lmpi -fpe0 -fp-model=precise -module ./mod
 # FLAGS_CPP   = -g -fopenmp -qmkl -lmpi -fp-model=precise
 # FLAGS_F90   = -g -Kopenmp -SSL2 -Haesofux
 # FLAGS_CPP   = -g -Kopenmp

@@ -212,7 +212,8 @@ contains
         integer, intent(in) ::  nplane, nxi, neta, nsar, ngnss, nobs, nnode, ndof
         integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j
         integer :: target_id_size
-        double precision :: xf, yf, zf, strike, dip
+        double precision :: xf, yf, zf, strike, dip, lxi, leta, strike_rad, dip_rad
+        double precision :: pi = 4d0*atan(1d0)
 
         ! initialize gmat
         do j = 1, 2*ndof
@@ -228,11 +229,36 @@ contains
         end do
 
         do iplane = 1, nplane
-            xf = theta(8*iplane - 7)
-            yf = theta(8*iplane - 6)
-            zf = theta(8*iplane - 5)
-            strike = theta(8*iplane - 4)
-            dip = theta(8*iplane - 3)
+            xf = theta(1)
+            yf = theta(2)
+            zf = theta(3)
+            strike = theta(4)
+            strike_rad = strike*pi/180d0
+            dip = theta(5)
+            dip_rad = dip*pi/180d0
+            lxi = theta(6)
+            leta = theta(7)
+            if (iplane == 2) then
+                xf = xf - leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
+                yf = yf + leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
+                zf = zf + leta/2d0*sin(dip_rad)
+
+                xf = xf + theta(9)
+                yf = yf + theta(10)
+                zf = zf + theta(11)
+
+                strike = strike + theta(12)
+                strike_rad = strike*pi/180d0
+                dip = dip + theta(13)
+                dip_rad = dip*pi/180d0
+                lxi = theta(14)
+                leta = theta(15)
+
+                xf = xf + leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
+                yf = yf - leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
+                zf = zf - leta/2d0*sin(dip_rad)
+            end if
+
             ! loop for each degree of freedom of slip
             do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &
                 (nxi - 1)*(neta - 1)*iplane

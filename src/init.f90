@@ -132,31 +132,6 @@ contains
                 end do
             end do
         end do
-
-        !  // for (node_id = 0 node_id < (nxi + 1) * (neta + 1) node_id++) {
-        !  //     printf("node_id: %d,    %d, %d, %d, %d num: %d\n", node_id,
-        !  //            node_to_elem_val(4 * node_id + 0),
-        !  //            node_to_elem_val(4 * node_id + 1),
-        !  //            node_to_elem_val(4 * node_id + 2),
-        !  //            node_to_elem_val(4 * node_id + 3),
-        !  //            node_to_elem_size(node_id))
-        !  // }
-        !  return
-        ! do patch_id = 1, (nxi)*(neta)
-        !    node1 = cny(1, patch_id)
-        !    node2 = cny(2, patch_id)
-        !    node3 = cny(3, patch_id)
-        !    node4 = cny(4, patch_id)
-        !    print *, coor(:, node1), " | ", coor(:, node2), " | ", &
-        !       coor(:, node3), " | ", coor(:, node4)
-        ! end do
-        ! do node_id = 1, (nxi + 1)*(neta + 1)*nplane
-        !     print *, node_to_elem_size(node_id), &
-        !         node_to_elem_val(1, node_id), &
-        !         node_to_elem_val(2, node_id), &
-        !         node_to_elem_val(3, node_id), &
-        !         node_to_elem_val(4, node_id)
-        ! end do
     end subroutine discretize_fault
 
     subroutine gen_laplacian(theta, nplane, nnode, nxi, neta, id_dof, ndof, luni, lmat)

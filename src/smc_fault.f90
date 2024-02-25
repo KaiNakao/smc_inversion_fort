@@ -23,11 +23,6 @@ contains
                 x = xmin + randr*(xmax - xmin)
                 particles(idim, iparticle) = x
             end do
-            if (particles(2, iparticle) > particles(10, iparticle)) then
-                tmp = particles(2, iparticle)
-                particles(2, iparticle) = particles(10, iparticle)
-                particles(10, iparticle) = tmp
-            end if
         end do
     end subroutine fault_sample_init_particles
 
@@ -72,28 +67,6 @@ contains
         integer :: i, j, ierr
         double precision :: log_sigma_sar2, log_sigma_gnss2, log_alpha2, neglog_sum
         double precision :: st_time, en_time
-
-        ! xf = particle(1)
-        ! yf = particle(2)
-        ! zf = particle(3)
-        ! strike = particle(4)
-        ! dip = particle(5)
-        ! lxi = particle(6)
-        ! leta = particle(7)
-        ! log_alpha2 = particle(8)
-        ! log_sigma_sar2 = particle(9)
-        ! log_sigma_gnss2 = particle(10)
-
-        ! xf = particle(1)
-        ! yf = particle(2)
-        ! zf = particle(3)
-        ! strike = particle(4)
-        ! dip = particle(5)
-        ! log_sigma_sar2 = particle(6)
-        ! log_sigma_gnss2 = particle(7)
-        ! log_alpha2 = particle(8)
-        ! lxi = particle(9)
-        ! leta = particle(10)
 
         st_time = omp_get_wtime()
         ! set fault geometry
@@ -158,10 +131,9 @@ contains
             slip_particle_cand, slip_st_rand, neglog_sum)
         fault_calc_likelihood = neglog_sum
         en_time = omp_get_wtime()
-        ! print *, "smc slip: ", en_time - st_time
     end function fault_calc_likelihood
 
-    subroutine work_eval_init_particles(work_size, nplane, ndim, particle_cur, &
+    subroutine work_eval_init_particles(myid, work_size, nplane, ndim, particle_cur, &
                                         work_particles, work_likelihood_ls, nxi, neta, nnode, ndof, nsar, ngnss, nobs, &
                                         cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
                                         id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
@@ -174,7 +146,7 @@ contains
                                         slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                         slip_particle_cur, slip_particle_cand, slip_st_rand)
         implicit none
-        integer, intent(in) :: work_size, nplane, ndim, nxi, neta, nnode, &
+        integer, intent(in) :: myid, work_size, nplane, ndim, nxi, neta, nnode, &
                                ndof, nsar, ngnss, nobs, nparticle_slip
         double precision, intent(in) :: work_particles(:, :), obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
@@ -528,9 +500,7 @@ contains
                                   slip_particle_cand, slip_st_rand, 0, "")
                 ! metropolis test and check domain of definition
                 call random_number(metropolis)
-                ! if (exp(gamma*(likelihood_cur - likelihood_cand)) > metropolis) then
-                if ((exp(gamma*(likelihood_cur - likelihood_cand)) > metropolis) &
-                    .and. (particle_cand(2) < particle_cand(10))) then
+                if (exp(gamma*(likelihood_cur - likelihood_cand)) > metropolis) then
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
                     end do
@@ -647,7 +617,7 @@ contains
         call mpi_scatter(particles, ndim*work_size, mpi_double_precision, &
                          work_particles, ndim*work_size, mpi_double_precision, &
                          0, mpi_comm_world, ierr)
-        call work_eval_init_particles(work_size, nplane, ndim, particle_cur, &
+        call work_eval_init_particles(myid, work_size, nplane, ndim, particle_cur, &
                                       work_particles, work_likelihood_ls, nxi, neta, nnode, ndof, nsar, ngnss, nobs, &
                                       cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
                                       id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
@@ -660,6 +630,7 @@ contains
                                       slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                       slip_particle_cur, slip_particle_cand, slip_st_rand)
         call mpi_barrier(mpi_comm_world, ierr)
+        print *, "work_eval_init_particles done"
         call mpi_gather(work_likelihood_ls, work_size, mpi_double_precision, &
                         likelihood_ls, work_size, mpi_double_precision, &
                         0, mpi_comm_world, ierr)
