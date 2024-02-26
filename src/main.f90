@@ -228,7 +228,7 @@ program main
     ! allocate (svec(2*ndof))
 
     ! allocate (particle(ndim_fault))
-    ! open (10, file="../visualize/mean_fault.dat", status='old')
+    ! open (10, file="mean_fault.dat", status='old')
     ! ! open (10, file="/home/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
     ! !       status='old')
     ! do i = 1, ndim_fault
@@ -239,7 +239,7 @@ program main
     ! print *, particle
     ! call discretize_fault(particle, nplane, nxi, neta, cny_fault, coor_fault, &
     !                       node_to_elem_val, node_to_elem_size, id_dof)
-    ! open (10, file="../visualize/mean_slip.dat", &
+    ! open (10, file="mean_slip.dat", &
     !       status='old')
     ! do i = 1, nnode
     !     read (10, *) slip(1, i), slip(2, i)
@@ -259,7 +259,7 @@ program main
 
     ! call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
     !            nobs, svec, 1, 0d0, gsvec, 1)
-    ! open (10, file="../visualize/dvec_est.dat", &
+    ! open (10, file="dvec_est.dat", &
     !       status='replace')
     ! ! open (10, file="/home/nakao/smc_inversion_fort/input/noto_synthetic/dvec_exact.dat", &
     ! !       status='replace')
@@ -281,7 +281,7 @@ program main
     ! do i = 1, ndim_fault + 1
     !     tmp(i) = 0d0
     ! end do
-    ! open (10, file="/home/nakao/smc_inversion_fort/work_noto_synthetic/output_synth_1e4_1e3/29.csv", status='old')
+    ! open (10, file="output/26.csv", status='old')
     ! do i = 1, nparticle_fault
     !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
     !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
@@ -307,7 +307,7 @@ program main
     !     particle(j) = particle(j)/nparticle_fault
     ! end do
 
-    ! open (10, file="../visualize/mean_fault.dat", status="replace")
+    ! open (10, file="mean_fault.dat", status="replace")
     ! do i = 1, ndim_fault
     !     write (10, *) particle(i)
     ! end do
