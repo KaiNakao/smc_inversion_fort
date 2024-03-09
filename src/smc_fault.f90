@@ -630,7 +630,6 @@ contains
                                       slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                       slip_particle_cur, slip_particle_cand, slip_st_rand)
         call mpi_barrier(mpi_comm_world, ierr)
-        print *, "work_eval_init_particles done"
         call mpi_gather(work_likelihood_ls, work_size, mpi_double_precision, &
                         likelihood_ls, work_size, mpi_double_precision, &
                         0, mpi_comm_world, ierr)
@@ -700,6 +699,9 @@ contains
             end if
             call mpi_barrier(mpi_comm_world, ierr)
             st_time = omp_get_wtime()
+            if (myid == 0) then
+                print *, "work_mcmc_sampling start"
+            end if
             call work_mcmc_sampling(work_assigned_num, work_particles, &
                                     work_particles_new, &
                                     work_likelihood_ls, nplane, id_start, &

@@ -229,35 +229,44 @@ contains
         end do
 
         do iplane = 1, nplane
-            xf = theta(1)
-            yf = theta(2)
-            zf = theta(3)
-            strike = theta(4)
+            ! xf = theta(1)
+            ! yf = theta(2)
+            ! zf = theta(3)
+            ! strike = theta(4)
+            ! strike_rad = strike*pi/180d0
+            ! dip = theta(5)
+            ! dip_rad = dip*pi/180d0
+            ! lxi = theta(6)
+            ! leta = theta(7)
+            ! if (iplane == 2) then
+            !     xf = xf - leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
+            !     yf = yf + leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
+            !     zf = zf + leta/2d0*sin(dip_rad)
+
+            !     xf = xf + theta(9)
+            !     yf = yf + theta(10)
+            !     zf = zf + theta(11)
+
+            !     strike = strike + theta(12)
+            !     strike_rad = strike*pi/180d0
+            !     dip = dip + theta(13)
+            !     dip_rad = dip*pi/180d0
+            !     lxi = theta(14)
+            !     leta = theta(15)
+
+            !     xf = xf + leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
+            !     yf = yf - leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
+            !     zf = zf - leta/2d0*sin(dip_rad)
+            ! end if
+            xf = theta(8*iplane - 7)
+            yf = theta(8*iplane - 6)
+            zf = theta(8*iplane - 5)
+            strike = theta(8*iplane - 4)
             strike_rad = strike*pi/180d0
-            dip = theta(5)
+            dip = theta(8*iplane - 3)
             dip_rad = dip*pi/180d0
-            lxi = theta(6)
-            leta = theta(7)
-            if (iplane == 2) then
-                xf = xf - leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-                yf = yf + leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-                zf = zf + leta/2d0*sin(dip_rad)
-
-                xf = xf + theta(9)
-                yf = yf + theta(10)
-                zf = zf + theta(11)
-
-                strike = strike + theta(12)
-                strike_rad = strike*pi/180d0
-                dip = dip + theta(13)
-                dip_rad = dip*pi/180d0
-                lxi = theta(14)
-                leta = theta(15)
-
-                xf = xf + leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-                yf = yf - leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-                zf = zf - leta/2d0*sin(dip_rad)
-            end if
+            lxi = theta(8*iplane - 2)
+            leta = theta(8*iplane - 1)
 
             ! loop for each degree of freedom of slip
             do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &

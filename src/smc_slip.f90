@@ -1131,6 +1131,7 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
+            ! print *, "ganmma: ", gamma
             ! gamma = slip_find_next_gamma_ess(gamma, likelihood_ls, weights, &
             !                                  neglog_evidence, nparticle)
             neglog_ret = neglog_ret + neglog_evidence
@@ -1180,7 +1181,7 @@ contains
             en_time1 = omp_get_wtime()
             ! print *, "loop total: ", en_time1 - st_time1
             ! print *, "hmc: ", en_time1 - st_time2
-            ! output result of stage iter (disabled)
+            ! ! output result of stage iter (disabled)
             ! write (iter_char, "(i0)") iter
             ! filename = trim(trim(output_dir)//trim(iter_char)//".csv")
             ! open (17, file=filename, status='replace')
