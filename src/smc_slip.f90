@@ -44,6 +44,8 @@ contains
         double precision, intent(inout) :: gsvec(:)
         integer :: i
 
+        double precision :: dmax
+
         do i = 1, nobs
             gsvec(i) = 0d0
         end do
@@ -80,11 +82,11 @@ contains
         end do
 
         slip_calc_prior = 0d0
-        do i = 1, nplane
-            log_alpha2 = theta(8*i)
-            slip_calc_prior = slip_calc_prior + &
-                              2d0*(nxi + 1)*(neta + 1)*log_alpha2/2d0
-        end do
+        ! do i = 1, nplane
+        !     log_alpha2 = theta(8*i)
+        !     slip_calc_prior = slip_calc_prior + &
+        !                       2d0*(nxi + 1)*(neta + 1)*log_alpha2/2d0
+        ! end do
         do i = 1, n
             slip_calc_prior = slip_calc_prior + lsvec(i)**2d0/(2d0*alpha2_full(i))
         end do
@@ -199,6 +201,8 @@ contains
                     y_prev = y_i
                     cnt = cnt + 1
                 end do
+                y_i = min(y_i, max_slip)
+                y_i = max(y_i, 0d0)
                 particle_cur(idim) = y_i
             end do
             do idim = 1, ndim
@@ -384,7 +388,6 @@ contains
 !$omp end parallel do
         evidence = evidence/nparticle
         neglog_evidence = -log(evidence) + diff_gamma*min_likelihood
-
         slip_find_next_gamma_ess = gamma
     end function slip_find_next_gamma_ess
 
@@ -468,8 +471,8 @@ contains
         call dpotrf('L', ndim, cov, ndim, ierr)
 
         do idim = 1, ndim
-            if (cov_diag(idim) < 1d-4) then
-                cov_diag(idim) = 1d-4
+            if (abs(cov_diag(idim)) < 1d-3) then
+                cov_diag(idim) = 1d-3
             end if
         end do
 
@@ -484,7 +487,6 @@ contains
 !             end do
 !         end do
 ! !$omp end parallel do
-!         print *, cov_diag
         return
     end subroutine slip_calc_cov_particles
 
@@ -562,7 +564,6 @@ contains
             id_start(iparticle + 1) = id_start(iparticle) + assigned_num(iparticle)
         end do
         en_time = omp_get_wtime()
-        ! print *, "time for un-parallelizable: ", en_time - st_time
 
 !$omp parallel do private(&
 !$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
@@ -585,73 +586,26 @@ contains
             do jparticle = istart, istart + nassigned - 1
                 dtau = dtau_ls(jparticle)
                 ntau = ntau_ls(jparticle)
+                if (ntau > 5) then
+                    print *, "ntau: ", ntau, " is too large"
+                    print *, "theta: ", particle_cur
+                end if
                 particle_cand = particle_cur
                 ! sampling momentum
                 do idim = 1, ndim
                     st_rand(idim) = st_rand_ls(idim, jparticle)
                     pvec(idim) = st_rand(idim)/sqrt(cov_diag(idim))
                 end do
-                ! initial hamiltonian
-                ham_cur = post_cur
-                do idim = 1, ndim
-                    ham_cur = ham_cur + pvec(idim)*cov_diag(idim)*pvec(idim)/2d0
-                end do
-                ! leapfrog integration
-                do idim = 1, ndim
-                    particle_cand(idim) = particle_cand(idim) &
-                                          + cov_diag(idim)*pvec(idim)*5d-1*dtau
-                end do
-                do itau = 1, ntau
-                    call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-                                        ltmat_index, ltmat_val, dvec, gamma, &
-                                        gsvec, lsvec, sigma2_full, alpha2_full, &
-                                        nobs, ndof, nnode, ndim)
-                    do idim = 1, ndim
-                        pvec(idim) = pvec(idim) - grad(idim)*dtau
-                    end do
-                    do idim = 1, ndim
-                        particle_cand(idim) = particle_cand(idim) &
-                                              + cov_diag(idim)*pvec(idim)*dtau
-                    end do
-                end do
-                call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-                                    ltmat_index, ltmat_val, dvec, gamma, &
-                                    gsvec, lsvec, sigma2_full, alpha2_full, &
-                                    nobs, ndof, nnode, ndim)
-                do idim = 1, ndim
-                    pvec(idim) = pvec(idim) - grad(idim)*5d-1*dtau
-                end do
-                do idim = 1, ndim
-                    !   non negative constraints
-                    ! particle_cand(idim) = max(0d0, particle_cand(idim))
-                    if (particle_cand(idim) < 0d0) then
-                        particle_cand(idim) = -particle_cand(idim)
-                    end if
-                    !   max slip constraints
-                    ! particle_cand(idim) = min(max_slip, particle_cand(idim))
-                    if (particle_cand(idim) > max_slip) then
-                        particle_cand(idim) = 2*max_slip - particle_cand(idim)
-                    end if
-                end do
-                ! final hamiltonian
-                likelihood_cand = slip_calc_likelihood( &
-                                  particle_cand, dvec, sigma2_full, gmat, &
-                                  log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, &
-                                  gsvec, nobs, ndof)
-                prior_cand = slip_calc_prior(particle_cand, alpha2_full, theta, nplane, nxi, neta, &
-                                             lmat_index, lmat_val, lsvec, nnode)
-                post_cand = gamma*likelihood_cand + prior_cand
-                ham_cand = post_cand
-                do idim = 1, ndim
-                    ham_cand = ham_cand + pvec(idim)*cov_diag(idim)*pvec(idim)/2d0
-                end do
-
-                ! print *, "H: ", ham_cur, "->", ham_cand
-                ! print *, "L: ", post_cur, "->", post_cand
+                call slip_leapfrog(ham_cur, post_cur, ndim, pvec, cov_diag, &
+                                   particle_cand, dtau, ntau, grad, gmat, lmat_index, lmat_val, &
+                                   ltmat_index, ltmat_val, dvec, gamma, gsvec, lsvec, &
+                                   sigma2_full, alpha2_full, nobs, ndof, nnode, max_slip, &
+                                   likelihood_cand, log_sigma_sar2, log_sigma_gnss2, nsar, &
+                                   ngnss, prior_cand, theta, nplane, nxi, neta, &
+                                   post_cand, ham_cand, particle_cur)
                 !  metropolis test
                 metropolis = metropolis_ls(jparticle)
-                ! if (exp(ham_cur - ham_cand) > metropolis) then
-                if ((ham_cur - ham_cand) > log(metropolis)) then
+                if (((ham_cur - ham_cand) > log(metropolis))) then
                     ! accept
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
@@ -672,6 +626,7 @@ contains
                 prior_ls_new(jparticle) = prior_cur
             end do
         end do
+        print *, "accrate: ", acc_rate
         !   update configurations
         do iparticle = 1, nparticle
             do idim = 1, ndim
@@ -681,6 +636,104 @@ contains
             prior_ls(iparticle) = prior_ls_new(iparticle)
         end do
     end subroutine slip_hmc_sampling
+
+    subroutine slip_leapfrog(ham_cur, post_cur, ndim, pvec, cov_diag, &
+                             particle_cand, dtau, ntau, grad, gmat, lmat_index, lmat_val, &
+                             ltmat_index, ltmat_val, dvec, gamma, gsvec, lsvec, &
+                             sigma2_full, alpha2_full, nobs, ndof, nnode, max_slip, &
+                             likelihood_cand, log_sigma_sar2, log_sigma_gnss2, nsar, &
+                             ngnss, prior_cand, theta, nplane, nxi, neta, &
+                             post_cand, ham_cand, particle_cur)
+        implicit none
+        integer, intent(in) :: ndim, ntau, lmat_index(:, :), ltmat_index(:, :), &
+                               nobs, ndof, nnode, nsar, ngnss, nplane, nxi, neta
+        double precision, intent(in) :: post_cur, cov_diag(:), dtau, &
+            gmat(:, :), lmat_val(:, :), ltmat_val(:, :), dvec(:), gamma, &
+            sigma2_full(:), alpha2_full(:), max_slip, log_sigma_sar2, &
+            log_sigma_gnss2, theta(:), particle_cur(:)
+        double precision, intent(inout) :: ham_cur, pvec(:), particle_cand(:), grad(:), &
+            gsvec(:), lsvec(:), likelihood_cand, prior_cand, post_cand, ham_cand
+        integer :: idim, itau
+
+        double precision :: dtmp1, dtmp2
+
+        ! initial hamiltonian
+        ham_cur = post_cur
+        do idim = 1, ndim
+            ham_cur = ham_cur + pvec(idim)*cov_diag(idim)*pvec(idim)/2d0
+        end do
+        ! leapfrog integration
+        do idim = 1, ndim
+            particle_cand(idim) = particle_cand(idim) &
+                                  + cov_diag(idim)*pvec(idim)*5d-1*dtau
+            if (abs(particle_cand(idim)) > 1d3) then
+                particle_cand = particle_cur
+                ham_cand = 1d20
+                return
+            end if
+        end do
+        do itau = 1, ntau
+            call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
+                                ltmat_index, ltmat_val, dvec, gamma, &
+                                gsvec, lsvec, sigma2_full, alpha2_full, &
+                                nobs, ndof, nnode, ndim)
+            ! do idim = 1, ndim
+            !     particle_cand(idim) = particle_cand(idim) - 1d-8
+            !     dtmp1 = gamma*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
+            !                                        log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
+            !     dtmp1 = dtmp1 + slip_calc_prior(particle_cand, alpha2_full, &
+            !                                     theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
+            !     particle_cand(idim) = particle_cand(idim) + 2d-8
+            !     dtmp2 = gamma*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
+            !                                        log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
+            !     dtmp2 = dtmp2 + slip_calc_prior(particle_cand, alpha2_full, &
+            !                                     theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
+            !     particle_cand(idim) = particle_cand(idim) - 1d-8
+            !     print *, (dtmp2 - dtmp1)/2d-8, grad(idim)
+            ! end do
+            do idim = 1, ndim
+                pvec(idim) = pvec(idim) - grad(idim)*dtau
+            end do
+            do idim = 1, ndim
+                particle_cand(idim) = particle_cand(idim) &
+                                      + cov_diag(idim)*pvec(idim)*dtau
+                if (abs(particle_cand(idim)) > 1d3) then
+                    particle_cand = particle_cur
+                    ham_cand = 1d20
+                    return
+                end if
+            end do
+        end do
+        call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
+                            ltmat_index, ltmat_val, dvec, gamma, &
+                            gsvec, lsvec, sigma2_full, alpha2_full, &
+                            nobs, ndof, nnode, ndim)
+        do idim = 1, ndim
+            pvec(idim) = pvec(idim) - grad(idim)*5d-1*dtau
+        end do
+        do idim = 1, ndim
+            !   non negative constraints
+            if (particle_cand(idim) < 0d0) then
+                particle_cand(idim) = -particle_cand(idim)
+            end if
+            !   max slip constraints
+            if (particle_cand(idim) > max_slip) then
+                particle_cand(idim) = 2*max_slip - particle_cand(idim)
+            end if
+        end do
+        ! final hamiltonian
+        likelihood_cand = slip_calc_likelihood( &
+                          particle_cand, dvec, sigma2_full, gmat, &
+                          log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, &
+                          gsvec, nobs, ndof)
+        prior_cand = slip_calc_prior(particle_cand, alpha2_full, theta, nplane, nxi, neta, &
+                                     lmat_index, lmat_val, lsvec, nnode)
+        post_cand = gamma*likelihood_cand + prior_cand
+        ham_cand = post_cand
+        do idim = 1, ndim
+            ham_cand = ham_cand + pvec(idim)*cov_diag(idim)*pvec(idim)/2d0
+        end do
+    end subroutine
 
     subroutine slip_hmc_tuning(gamma, particles, particles_new, &
                                likelihood_ls, likelihood_ls_new, prior_ls, &
@@ -692,7 +745,7 @@ contains
                                ltmat_index, ltmat_val, &
                                nnode, max_slip, st_rand_ls, metropolis_ls, &
                                particle_cur, particle_cand, st_rand, gsvec, lsvec, &
-                               dtau_upper, ntau_upper, dtau_ls, ntau_ls)
+                               log_dtau_upper, log_dtau_lower, ntau_upper, dtau_ls, ntau_ls)
         implicit none
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), ltmat_val(:, :), &
@@ -706,7 +759,7 @@ contains
             likelihood_ls_new(:), prior_ls_new(:), &
             st_rand_ls(:, :), metropolis_ls(:), particle_cur(:), &
             particle_cand(:), st_rand(:), gsvec(:), lsvec(:), dtau_ls(:), &
-            dtau_upper
+            log_dtau_upper, log_dtau_lower
 
         integer, intent(inout) :: id_start(:), ntau_ls(:)
         integer :: iparticle, jparticle, idim, nassigned, istart, ierr
@@ -715,12 +768,12 @@ contains
         double precision :: v1, v2 ! box muller
 
         ! for HMC
-        double precision :: dtau, pvec(ndim), grad(2*ndof), ham_cur, ham_cand
+        double precision :: log_dtau, dtau, pvec(ndim), grad(2*ndof), ham_cur, ham_cand
         double precision :: acc_rate, gamma_tmp, delta
         integer :: itau, ntau
 
         ! for tuning HMC
-        double precision :: weights_hmc(nparticle), sum_score
+        double precision :: weights_hmc(nparticle), sum_score, dtau_mean
         double precision :: dham, score, d_nparticle, u, &
             dham_ls(nparticle), score_ls(nparticle)
         double precision :: dtau_ls_new(nparticle)
@@ -731,16 +784,15 @@ contains
         double precision :: st_time, en_time
 
         d_nparticle = dble(nparticle)
-        ntau = 5
-        dtau = 1d-1
 
         ! sampling from uniform distribution
         do iparticle = 1, nparticle
             call random_number(dtau)
             ntau = int(1 + dtau*(ntau_upper - 1))
             ntau_ls(iparticle) = ntau
-            call random_number(dtau)
-            dtau = dtau*dtau_upper
+            call random_number(log_dtau)
+            log_dtau = log_dtau_lower + log_dtau*(log_dtau_upper - log_dtau_lower)
+            dtau = exp(log_dtau)
             dtau_ls(iparticle) = dtau
         end do
 
@@ -759,7 +811,6 @@ contains
             id_start(iparticle + 1) = id_start(iparticle) + assigned_num(iparticle)
         end do
         en_time = omp_get_wtime()
-        ! print *, "time for un-parallelizable: ", en_time - st_time
 
 !$omp parallel do private(&
 !$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
@@ -788,78 +839,25 @@ contains
                     st_rand(idim) = st_rand_ls(idim, jparticle)
                     pvec(idim) = st_rand(idim)/sqrt(cov_diag(idim))
                 end do
-                ! initial hamiltonian
-                ham_cur = post_cur
-                do idim = 1, ndim
-                    ham_cur = ham_cur + pvec(idim)*cov_diag(idim)*pvec(idim)/2d0
-                end do
-                ! leapfrog integration
-                do idim = 1, ndim
-                    particle_cand(idim) = particle_cand(idim) &
-                                          + cov_diag(idim)*pvec(idim)*5d-1*dtau
-                end do
-                do itau = 1, ntau
-                    call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-                                        ltmat_index, ltmat_val, dvec, gamma, &
-                                        gsvec, lsvec, sigma2_full, alpha2_full, &
-                                        nobs, ndof, nnode, ndim)
-                    do idim = 1, ndim
-                        pvec(idim) = pvec(idim) - grad(idim)*dtau
-                    end do
-                    do idim = 1, ndim
-                        particle_cand(idim) = particle_cand(idim) &
-                                              + cov_diag(idim)*pvec(idim)*dtau
-                    end do
-                end do
-                call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-                                    ltmat_index, ltmat_val, dvec, gamma, &
-                                    gsvec, lsvec, sigma2_full, alpha2_full, &
-                                    nobs, ndof, nnode, ndim)
-                do idim = 1, ndim
-                    pvec(idim) = pvec(idim) - grad(idim)*5d-1*dtau
-                end do
-                do idim = 1, ndim
-                    !   non negative constraints
-                    ! particle_cand(idim) = max(0d0, particle_cand(idim))
-                    if (particle_cand(idim) < 0d0) then
-                        particle_cand(idim) = -particle_cand(idim)
-                    end if
-                    !   max slip constraints
-                    ! particle_cand(idim) = min(max_slip, particle_cand(idim))
-                    if (particle_cand(idim) > max_slip) then
-                        particle_cand(idim) = 2*max_slip - particle_cand(idim)
-                    end if
-                end do
-                ! final hamiltonian
-                likelihood_cand = slip_calc_likelihood( &
-                                  particle_cand, dvec, sigma2_full, gmat, &
-                                  log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, &
-                                  gsvec, nobs, ndof)
-                prior_cand = slip_calc_prior(particle_cand, alpha2_full, theta, nplane, nxi, neta, &
-                                             lmat_index, lmat_val, lsvec, nnode)
-                post_cand = gamma*likelihood_cand + prior_cand
-                ham_cand = post_cand
-                do idim = 1, ndim
-                    ham_cand = ham_cand + pvec(idim)*cov_diag(idim)*pvec(idim)/2d0
-                end do
-
-                ! dham = abs(ham_cur - ham_cand)
+                call slip_leapfrog(ham_cur, post_cur, ndim, pvec, cov_diag, &
+                                   particle_cand, dtau, ntau, grad, gmat, lmat_index, lmat_val, &
+                                   ltmat_index, ltmat_val, dvec, gamma, gsvec, lsvec, &
+                                   sigma2_full, alpha2_full, nobs, ndof, nnode, max_slip, &
+                                   likelihood_cand, log_sigma_sar2, log_sigma_gnss2, nsar, &
+                                   ngnss, prior_cand, theta, nplane, nxi, neta, &
+                                   post_cand, ham_cand, particle_cur)
                 dham = (ham_cur - ham_cand)
                 score = 0d0
                 do idim = 1, ndim
                     score = score + (particle_cand(idim) - particle_cur(idim))**2*cov_diag(idim)
                 end do
-                ! score = score/ntau*min(1d0, exp(ham_cur - ham_cand))
                 score = score/ntau*exp(min(0d0, dham))
-                dham_ls(jparticle) = dham
                 score_ls(jparticle) = score
 
                 !  metropolis test
                 metropolis = metropolis_ls(jparticle)
-                ! if (exp(ham_cur - ham_cand) > metropolis) then
                 if (ham_cur - ham_cand > log(metropolis)) then
                     ! accept
-                    ! print *, "accpet dham: ", abs(ham_cur - ham_cand)
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
                     end do
@@ -870,7 +868,6 @@ contains
                 else
                     ! reject
                 end if
-
             end do
         end do
 
@@ -881,18 +878,18 @@ contains
         end do
 !$omp end parallel do
 
-!$omp parallel do private(iparticle)
-        do iparticle = 1, nparticle
-            weights_hmc(iparticle) = score_ls(iparticle)/sum_score
-        end do
-!$omp end parallel do
-
         ! if degenerated
-        if (abs(sum_score) < 0.9) then
+        if (sum_score < 1d-5) then
             do iparticle = 1, nparticle
                 weights_hmc(iparticle) = 1/dble(nparticle)
             end do
             sum_score = 1d0
+        else
+!$omp parallel do private(iparticle)
+            do iparticle = 1, nparticle
+                weights_hmc(iparticle) = score_ls(iparticle)/sum_score
+            end do
+!$omp end parallel do
         end if
         ! residual systematic resampling
         call random_number(u)
@@ -918,13 +915,15 @@ contains
         end do
 !$omp end parallel do
 
-        dtau_upper = 0d0
-!$omp parallel do private(iparticle) reduction(+:dtau_upper)
+        dtau_mean = 0d0
+!$omp parallel do private(iparticle) reduction(+:dtau_mean)
         do iparticle = 1, nparticle
-            dtau_upper = dtau_upper + dtau_ls(iparticle)
+            dtau_mean = dtau_mean + dtau_ls(iparticle)
         end do
 !$omp end parallel do
-        dtau_upper = dtau_upper/nparticle*2d0
+        dtau_mean = dtau_mean/d_nparticle
+        log_dtau_upper = log(dtau_mean) + log(5d0)
+        log_dtau_lower = log(dtau_mean) - log(5d0)
 
     end subroutine slip_hmc_tuning
 
@@ -995,12 +994,10 @@ contains
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
                     !   non negative constraints
-                    ! particle_cand(idim) = max(0d0, particle_cand(idim))
                     if (particle_cand(idim) < 0d0) then
                         particle_cand(idim) = -particle_cand(idim)
                     end if
                     !   max slip constraints
-                    ! particle_cand(idim) = min(max_slip, particle_cand(idim))
                     if (particle_cand(idim) > max_slip) then
                         particle_cand(idim) = 2*max_slip - particle_cand(idim)
                     end if
@@ -1093,7 +1090,7 @@ contains
         ! HMC
         double precision :: cov_diag(ndim)
         ! tuning HMC
-        double precision :: dtau_upper = 1d0, dtau_ls(nparticle)
+        double precision :: log_dtau_upper = 2d0, log_dtau_lower = -10d0, dtau_ls(nparticle)
         integer :: ntau_upper = 5, ntau_ls(nparticle)
         iter = 0
 
@@ -1131,10 +1128,13 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
-            ! print *, "ganmma: ", gamma
             ! gamma = slip_find_next_gamma_ess(gamma, likelihood_ls, weights, &
             !                                  neglog_evidence, nparticle)
             neglog_ret = neglog_ret + neglog_evidence
+            if (iter > 100) then
+                neglog_ret = 1d10
+                exit
+            end if
 
             ! normalize weights(sum of weights needs to be 1)
             call slip_normalize_weights(weights, nparticle)
@@ -1146,15 +1146,6 @@ contains
                                          nparticle, ndim, cov_diag)
             call slip_resample_particles(nparticle, weights, assigned_num)
             st_time2 = omp_get_wtime()
-            ! call slip_mcmc_sampling(gamma, particles, particles_new, &
-            !                         likelihood_ls, likelihood_ls_new, prior_ls, &
-            !                         prior_ls_new, cov, assigned_num, id_start, &
-            !                         nparticle, ndim, dvec, sigma2_full, alpha2_full, &
-            !                         theta, nplane, nxi, neta, &
-            !                         gmat, log_sigma_sar2, log_sigma_gnss2, nsar, &
-            !                         ngnss, nobs, ndof, lmat_index, lmat_val, &
-            !                         nnode, max_slip, st_rand_ls, metropolis_ls, &
-            !                         particle_cur, particle_cand, st_rand, gsvec, lsvec)
             call slip_hmc_tuning(gamma, particles, particles_new, &
                                  likelihood_ls, likelihood_ls_new, prior_ls, &
                                  prior_ls_new, cov, cov_diag, assigned_num, id_start, &
@@ -1165,7 +1156,7 @@ contains
                                  ltmat_index, ltmat_val, &
                                  nnode, max_slip, st_rand_ls, metropolis_ls, &
                                  particle_cur, particle_cand, st_rand, gsvec, lsvec, &
-                                 dtau_upper, ntau_upper, dtau_ls, ntau_ls)
+                                 log_dtau_upper, log_dtau_lower, ntau_upper, dtau_ls, ntau_ls)
 
             call slip_hmc_sampling(gamma, particles, particles_new, &
                                    likelihood_ls, likelihood_ls_new, prior_ls, &
@@ -1224,8 +1215,7 @@ contains
             close (17)
             deallocate (slip)
         end if
-
-        neglog_ret = min(1d10, neglog_ret)
+        print *, "iter: ", iter, " neglog_ret: ", neglog_ret
 
     end subroutine
 end module smc_slip

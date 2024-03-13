@@ -465,7 +465,7 @@ contains
                 likelihood_cur = fault_calc_likelihood( &
                                  particle_cur, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
                                  coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-                                 lmat_index, lmat_val, lmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+                                 lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                                  obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
                                  target_id_val, node_id_in_patch, &
                                  xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
@@ -500,7 +500,7 @@ contains
                                   slip_particle_cand, slip_st_rand, 0, "")
                 ! metropolis test and check domain of definition
                 call random_number(metropolis)
-                if (exp(gamma*(likelihood_cur - likelihood_cand)) > metropolis) then
+                if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
                     end do
@@ -674,6 +674,7 @@ contains
                     end do
                     sum_assigned_ls(iproc) = sum_assigned
                 end do
+                print *, "sum_assigned", sum_assigned_ls
                 displs(1) = 0
                 do iproc = 1, numprocs
                     displs(iproc + 1) = displs(iproc) + sum_assigned_ls(iproc)

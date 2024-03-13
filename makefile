@@ -7,7 +7,7 @@
 # ibis
 COMPILER_F90 = mpiifort -fc=ifx
 COMPILER_CPP = mpiicpc -cxx=icpx 
-FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise -module ./mod
+FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise -fpe0 -traceback -module ./mod
 FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
 # for debug 
 # FLAGS_F90   = -g -fopenmp -check all -traceback -qmkl -lmpi -fpe0 -fp-model=precise -module ./mod
