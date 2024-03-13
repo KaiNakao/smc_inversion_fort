@@ -84,7 +84,7 @@ program main
     call random_seed(size=seedsize)
     allocate (seed(seedsize))
     do i = 1, seedsize
-        seed(i) = 2
+        seed(i) = 20
     end do
     call random_seed(put=seed)
 
@@ -290,8 +290,8 @@ program main
     do i = 1, ndim_fault + 1
         tmp(i) = 0d0
     end do
-    open (10, file="output_obs_1e4_1e3_3plane_without_sigma/44.csv", status='old')
-    ! open (10, file="output/26.csv", status='old')
+    ! open (10, file="output_obs_1e4_1e3_3plane_without_sigma/44.csv", status='old')
+    open (10, file="output/26.csv", status='old')
     do i = 1, nparticle_fault
         ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
         !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
