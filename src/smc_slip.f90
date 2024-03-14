@@ -636,7 +636,7 @@ contains
                 prior_ls_new(jparticle) = prior_cur
             end do
         end do
-        print *, "accrate: ", acc_rate
+        ! print *, "acc_rate: ", acc_rate
         !   update configurations
         do iparticle = 1, nparticle
             do idim = 1, ndim
@@ -905,15 +905,16 @@ contains
 
         ! if degenerated
         if (sum_score < 1d-5) then
-        do iparticle = 1, nparticle, tuning_factor
-            istart = id_start(iparticle)
-            nassigned = assigned_num(iparticle)
-            do jparticle = istart, istart + nassigned - 1
-                weights_hmc(jparticle) = 1/dble(nparticle/tuning_factor)
+            sum_score = 0d0
+            do iparticle = 1, nparticle, tuning_factor
+                istart = id_start(iparticle)
+                nassigned = assigned_num(iparticle)
+                do jparticle = istart, istart + nassigned - 1
+                    score_ls(jparticle) = 1d0
+                    sum_score = sum_score + 1d0
+                end do
             end do
-        end do
-        sum_score = 1d0
-        else
+        end if
 !$omp parallel do private(iparticle, istart, nassigned, jparticle)
         do iparticle = 1, nparticle, tuning_factor
             istart = id_start(iparticle)
@@ -923,7 +924,6 @@ contains
             end do
         end do
 !$omp end parallel do
-        end if
 
         ! residual systematic resampling
         call random_number(u)
@@ -938,6 +938,18 @@ contains
                 u = u + nassigned_hmc(jparticle)/d_nparticle - weights_hmc(jparticle)
             end do
         end do
+
+        cnt = 0
+        do iparticle = 1, nparticle, tuning_factor
+            istart = id_start(iparticle)
+            nassigned = assigned_num(iparticle)
+            do jparticle = istart, istart + nassigned - 1
+                cnt = cnt + nassigned_hmc(jparticle)
+            end do
+        end do
+        if (cnt /= nparticle) then
+            print *, "wrong: ", theta
+        end if
 
         cnt = 0
         do iparticle = 1, nparticle, tuning_factor
@@ -966,8 +978,9 @@ contains
         end do
 !$omp end parallel do
         dtau_mean = dtau_mean/d_nparticle
-        log_dtau_upper = log(dtau_mean) + log(5d0)
-        log_dtau_lower = log(dtau_mean) - log(5d0)
+        log_dtau_upper = min(log(dtau_mean) + log(5d0), log_dtau_upper)
+        log_dtau_lower = max(log(dtau_mean) - log(5d0), log_dtau_lower)
+        ! print *, "lim dtau: ", exp(log_dtau_lower), exp(log_dtau_upper)
 
     end subroutine slip_hmc_tuning
 
@@ -1164,7 +1177,7 @@ contains
         ! HMC
         double precision :: cov_diag(ndim)
         ! tuning HMC
-        double precision :: log_dtau_upper = 2d0, log_dtau_lower = -10d0, dtau_ls(nparticle)
+        double precision :: log_dtau_upper = 1d1, log_dtau_lower = -1d1, dtau_ls(nparticle)
         integer :: ntau_upper = 5, ntau_ls(nparticle)
 
         double precision :: gsdvec(ndof*2), gsgmat(ndof*2, ndof*2)
@@ -1210,7 +1223,7 @@ contains
             ! gamma = slip_find_next_gamma_ess(gamma, likelihood_ls, weights, &
             !                                  neglog_evidence, nparticle)
             neglog_ret = neglog_ret + neglog_evidence
-            if (iter > 100) then
+            if (iter > 200) then
                 neglog_ret = 1d10
                 exit
             end if
@@ -1295,7 +1308,7 @@ contains
             close (17)
             deallocate (slip)
         end if
-        print *, "iter: ", iter, " neglog_ret: ", neglog_ret
+        ! print *, "iter: ", iter, " neglog_ret: ", neglog_ret
 
     end subroutine
 end module smc_slip

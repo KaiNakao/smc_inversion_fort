@@ -383,10 +383,12 @@ contains
 
     subroutine fault_reorder_to_send(assigned_num, particles, &
                                      tmp_assigned_num, tmp_particles, &
-                                     sorted_idx, nparticle, ndim, numprocs, work_size)
+                                     sorted_idx, nparticle, ndim, numprocs, &
+                                     work_size, tmp_likelihood_ls, likelihood_ls)
         implicit none
         integer, intent(inout) :: assigned_num(:), tmp_assigned_num(:)
-        double precision, intent(inout) :: particles(:, :), tmp_particles(:, :)
+        double precision, intent(inout) :: particles(:, :), tmp_particles(:, :), &
+            tmp_likelihood_ls(:), likelihood_ls(:)
         integer, intent(inout) :: sorted_idx(:)
         integer, intent(in) :: nparticle, ndim, numprocs, work_size
         integer :: iparticle, idim, iproc
@@ -397,6 +399,7 @@ contains
                 tmp_particles(idim, iparticle) = &
                     particles(idim, iparticle)
             end do
+            tmp_likelihood_ls(iparticle) = likelihood_ls(iparticle)
         end do
 
         do iparticle = 1, nparticle
@@ -412,13 +415,15 @@ contains
                     particles(idim, id_new) = &
                         tmp_particles(idim, id_org)
                 end do
+                likelihood_ls(id_new) = tmp_likelihood_ls(id_org)
             end do
         end do
     end subroutine fault_reorder_to_send
 
     subroutine work_mcmc_sampling(work_assigned_num, work_particles, &
                                   work_particles_new, &
-                                  work_likelihood_ls, nplane, id_start, &
+                                  work_likelihood_ls, work_likelihood_ls_new, &
+                                  nplane, id_start, &
                                   particle_cur, particle_cand, &
                                   st_rand, work_size, ndim, &
                                   cov, gamma, myid, nxi, neta, nnode, ndof, &
@@ -434,16 +439,16 @@ contains
                                   slip_mean, slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
                                   slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                   slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-                                  slip_particle_cand, slip_st_rand)
+                                  slip_particle_cand, slip_st_rand, work_acc_count, range)
         implicit none
         integer, intent(in) :: work_assigned_num(:), nplane, id_start(:), work_size, ndim, myid, &
                                nxi, neta, nnode, ndof, nsar, ngnss, nobs, nparticle_slip
-        double precision, intent(in) :: work_particles(:, :), cov(:, :), gamma, obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
+        double precision, intent(in) :: work_particles(:, :), work_likelihood_ls(:), cov(:, :), gamma, obs_points(:, :), &
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
                                   id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
-                                  slip_assigned_num(:), slip_id_start(:)
-        double precision, intent(inout) :: work_particles_new(:, :), work_likelihood_ls(:), &
+                                  slip_assigned_num(:), slip_id_start(:), work_acc_count
+        double precision, intent(inout) :: work_particles_new(:, :), work_likelihood_ls_new(:), &
             particle_cur(:), particle_cand(:), st_rand(:), coor_fault(:, :), luni(:, :), &
             lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), sigma2_full(:), alpha2_full(:), &
             xinode(:), etanode(:), uxinode(:), uetanode(:), r1vec(:), r2vec(:), nvec(:), response_dist(:, :), &
@@ -455,26 +460,28 @@ contains
         double precision :: likelihood_cur, likelihood_cand, metropolis
         double precision :: v1, v2
 
+        work_acc_count = 0
         do iparticle = 1, work_size
             nassigned = work_assigned_num(iparticle)
             istart = id_start(iparticle)
             do idim = 1, ndim
                 particle_cur(idim) = work_particles(idim, iparticle)
             end do
+            likelihood_cur = fault_calc_likelihood( &
+                             particle_cur, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+                             coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+                             lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+                             obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+                             xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+                             uobs, uret, slip_particles, slip_particles_new, &
+                             nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
+                             slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
+                             slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+                             slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+                             slip_particle_cand, slip_st_rand, 0, "")
             do jparticle = istart, istart + nassigned - 1
-                likelihood_cur = fault_calc_likelihood( &
-                                 particle_cur, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-                                 coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-                                 lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
-                                 obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
-                                 target_id_val, node_id_in_patch, &
-                                 xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
-                                 uobs, uret, slip_particles, slip_particles_new, &
-                                 nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
-                                 slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
-                                 slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
-                                 slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-                                 slip_particle_cand, slip_st_rand, 0, "")
+                ! print *, "likelihood_cur: ", likelihood_cur
+                ! print *, "likelihood_cur: -> ", likelihood_cur
                 ! propose particle_cand
                 do idim = 1, ndim
                     call fault_box_muller(v1, v2)
@@ -484,6 +491,17 @@ contains
                            ndim, cov, ndim, st_rand, 1)
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
+                end do
+                ! range constraints
+                do idim = 1, ndim
+                    if (range(2, idim) - range(1, idim) > 1d-3) then
+                        if (particle_cand(idim) < range(1, idim)) then
+                            particle_cand(idim) = min(2*range(1, idim) - particle_cand(idim), range(2, idim))
+                        end if
+                        if (particle_cand(idim) > range(2, idim)) then
+                            particle_cand(idim) = max(2*range(2, idim) - particle_cand(idim), range(1, idim))
+                        end if
+                    end if
                 end do
                 ! calculate negative log likelihood of the proposed configuration
                 likelihood_cand = fault_calc_likelihood( &
@@ -505,11 +523,11 @@ contains
                         particle_cur(idim) = particle_cand(idim)
                     end do
                     likelihood_cur = likelihood_cand
+                    work_acc_count = work_acc_count + 1d0
                 else
                 end if
-
                 ! save to new particle list
-                work_likelihood_ls(jparticle) = likelihood_cur
+                work_likelihood_ls_new(jparticle) = likelihood_cur
                 do idim = 1, ndim
                     work_particles_new(idim, jparticle) = &
                         particle_cur(idim)
@@ -560,14 +578,14 @@ contains
         ! array for only the master process
         integer, allocatable :: sum_assigned_ls(:), displs(:)
         double precision, allocatable :: weights(:), mean(:)
-        double precision, allocatable :: likelihood_ls(:)
+        double precision, allocatable :: likelihood_ls(:), tmp_likelihood_ls(:)
         integer, allocatable :: assigned_num(:)
         integer, allocatable :: sorted_idx(:)
         double precision, allocatable :: tmp_particles(:, :)
         integer, allocatable :: tmp_assigned_num(:)
         ! for MPI
         double precision, allocatable :: work_particles(:, :), work_particles_new(:, :), &
-            work_likelihood_ls(:)
+            work_likelihood_ls(:), work_likelihood_ls_new(:)
         integer, allocatable :: work_assigned_num(:)
 
         double precision, allocatable :: particle_cur(:), particle_cand(:)
@@ -575,6 +593,9 @@ contains
         double precision, allocatable :: cov(:, :), st_rand(:)
         integer :: ierr
         integer, allocatable :: istatus(:)
+
+        double precision :: acc_rate
+        integer :: work_acc_count, acc_count
 
         ! measuring time
         double precision :: st_time, en_time
@@ -588,6 +609,7 @@ contains
             allocate (weights(nparticle))
             allocate (mean(ndim))
             allocate (likelihood_ls(nparticle))
+            allocate (tmp_likelihood_ls(nparticle))
             allocate (assigned_num(nparticle))
             allocate (sorted_idx(nparticle))
             allocate (tmp_particles(ndim, nparticle))
@@ -603,6 +625,7 @@ contains
         allocate (work_particles(ndim, work_size))
         allocate (work_particles_new(ndim, 50*work_size))
         allocate (work_likelihood_ls(50*work_size))
+        allocate (work_likelihood_ls_new(50*work_size))
         allocate (work_assigned_num(work_size))
         allocate (particle_cur(ndim))
         allocate (particle_cand(ndim))
@@ -665,8 +688,7 @@ contains
                 call fault_resample_particles(nparticle, weights, assigned_num)
                 call fault_reorder_to_send(assigned_num, particles, tmp_assigned_num, &
                                            tmp_particles, sorted_idx, nparticle, ndim, &
-                                           numprocs, work_size)
-                ! for(iproc=0 iproc < numprocs iproc + +) {
+                                           numprocs, work_size, tmp_likelihood_ls, likelihood_ls)
                 do iproc = 1, numprocs
                     sum_assigned = 0
                     do iparticle = (iproc - 1)*work_size + 1, iproc*work_size
@@ -684,6 +706,9 @@ contains
             call mpi_bcast(cov, ndim*ndim, mpi_double_precision, 0, mpi_comm_world, ierr)
             call mpi_scatter(particles, work_size*ndim, mpi_double_precision, &
                              work_particles, work_size*ndim, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
+            call mpi_scatter(likelihood_ls, work_size, mpi_double_precision, &
+                             work_likelihood_ls, work_size, mpi_double_precision, &
                              0, mpi_comm_world, ierr)
             call mpi_scatter(assigned_num, work_size, mpi_integer, work_assigned_num, &
                              work_size, mpi_integer, 0, mpi_comm_world, ierr)
@@ -704,8 +729,8 @@ contains
                 print *, "work_mcmc_sampling start"
             end if
             call work_mcmc_sampling(work_assigned_num, work_particles, &
-                                    work_particles_new, &
-                                    work_likelihood_ls, nplane, id_start, &
+                                    work_particles_new, work_likelihood_ls, &
+                                    work_likelihood_ls_new, nplane, id_start, &
                                     particle_cur, particle_cand, &
                                     st_rand, work_size, ndim, &
                                     cov, gamma, myid, nxi, neta, nnode, ndof, &
@@ -721,14 +746,14 @@ contains
                                     slip_mean, slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
                                     slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                     slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-                                    slip_particle_cand, slip_st_rand)
+                                    slip_particle_cand, slip_st_rand, work_acc_count, range)
             call mpi_barrier(mpi_comm_world, ierr)
             en_time = omp_get_wtime()
             if (myid == 0) then
                 print *, "work_mcmc_sampling etime: ", en_time - st_time
             end if
 
-            call mpi_gatherv(work_likelihood_ls, sum_assigned, mpi_double_precision, &
+            call mpi_gatherv(work_likelihood_ls_new, sum_assigned, mpi_double_precision, &
                              likelihood_ls, sum_assigned_ls, displs, mpi_double_precision, &
                              0, mpi_comm_world, ierr)
             if (myid == 0) then
@@ -741,6 +766,13 @@ contains
             call mpi_gatherv(work_particles_new, sum_assigned*ndim, mpi_double_precision, &
                              particles, sum_assigned_ls, displs, mpi_double_precision, &
                              0, mpi_comm_world, ierr)
+            acc_count = 0
+            call mpi_reduce(work_acc_count, acc_count, 1, mpi_integer, mpi_sum, 0, &
+                            mpi_comm_world, ierr)
+            if (myid == 0) then
+                acc_rate = acc_count/dble(nparticle)
+                print *, "acc_rate: ", acc_rate
+            end if
 
             if (myid == 0) then
                 ! output result of stage 0(disabled)
