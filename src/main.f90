@@ -84,7 +84,7 @@ program main
     call random_seed(size=seedsize)
     allocate (seed(seedsize))
     do i = 1, seedsize
-        seed(i) = 20
+        seed(i) = 10
     end do
     call random_seed(put=seed)
 
@@ -281,38 +281,38 @@ program main
     ! end do
     ! print *, "variance reduction: ", 1d0 - dtmp1/dtmp2
 
-    ! calculate likelihood for given fault
-    allocate (particle(ndim_fault))
-    allocate (tmp(ndim_fault + 1))
-    do i = 1, ndim_fault
-        particle(i) = 0d0
-    end do
-    do i = 1, ndim_fault + 1
-        tmp(i) = 0d0
-    end do
-    ! open (10, file="output_obs_1e4_1e3_3plane_without_sigma/44.csv", status='old')
-    open (10, file="output/26.csv", status='old')
-    do i = 1, nparticle_fault
-        ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-        !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-        read (10, *) tmp
-        do j = 1, ndim_fault
-            particle(j) = particle(j) + tmp(j)
-        end do
-    end do
-    close (10)
-    tmp = particle
-    do j = 1, ndim_fault
-        particle(j) = particle(j)/nparticle_fault
-    end do
-    open (10, file="mean_fault.dat", status="replace")
-    do i = 1, ndim_fault
-        write (10, *) particle(i)
-    end do
-    close (10)
+    ! ! calculate likelihood for given fault
+    ! allocate (particle(ndim_fault))
+    ! allocate (tmp(ndim_fault + 1))
+    ! do i = 1, ndim_fault
+    !     particle(i) = 0d0
+    ! end do
+    ! do i = 1, ndim_fault + 1
+    !     tmp(i) = 0d0
+    ! end do
+    ! open (10, file="output_obs_1e4_1e3_3plane/48.csv", status='old')
+    ! ! open (10, file="output/26.csv", status='old')
+    ! do i = 1, nparticle_fault
+    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+    !     read (10, *) tmp
+    !     do j = 1, ndim_fault
+    !         particle(j) = particle(j) + tmp(j)
+    !     end do
+    ! end do
+    ! close (10)
+    ! tmp = particle
+    ! do j = 1, ndim_fault
+    !     particle(j) = particle(j)/nparticle_fault
+    ! end do
+    ! open (10, file="mean_fault.dat", status="replace")
+    ! do i = 1, ndim_fault
+    !     write (10, *) particle(i)
+    ! end do
+    ! close (10)
 
-    ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
-    ! !       status="old")
+    ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
+    ! ! ! !       status="old")
     ! open (10, file="data/theta.dat", status="old")
     ! do i = 1, ndim_fault
     !     read (10, *) particle(i)
@@ -320,23 +320,23 @@ program main
     ! close (10)
     ! print *, particle
 
-    st_time = omp_get_wtime()
-    print *, "start"
-    neglog = fault_calc_likelihood( &
-             particle, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-             coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-             lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
-             obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
-             xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
-             uobs, uret, slip_particles, slip_particles_new, &
-             nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
-             slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
-             slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
-             slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-             slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat")
-    en_time = omp_get_wtime()
-    print *, "etime: ", en_time - st_time
-    print *, "neglog: ", neglog
+    ! st_time = omp_get_wtime()
+    ! print *, "start"
+    ! neglog = fault_calc_likelihood( &
+    !          particle, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+    !          lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+    !          obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+    !          xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+    !          uobs, uret, slip_particles, slip_particles_new, &
+    !          nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
+    !          slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
+    !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+    !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+    !          slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat")
+    ! en_time = omp_get_wtime()
+    ! print *, "etime: ", en_time - st_time
+    ! print *, "neglog: ", neglog
 
     ! call calc_slip_map("output_obs_1e4_1e3/37.csv")
     ! if (myid == 0) then
@@ -344,57 +344,57 @@ program main
     !                      "output/mapslip.dat")
     ! end if
 
-    ! ! smc for fault
-    ! allocate (range(2, ndim_fault))
-    ! ! range of uniform prior distribution P(theta)
-    ! ! ! synthetic test
-    ! ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-    ! ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
-    ! ! !                       (/2, ndim_fault/))
-    ! ! ! real observation data
-    ! ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
-    ! !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
+    ! smc for fault
+    allocate (range(2, ndim_fault))
+    ! range of uniform prior distribution P(theta)
+    ! ! synthetic test
+    ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
+    ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
     ! !                       (/2, ndim_fault/))
+    ! ! real observation data
+    ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
+    !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
+    !                       (/2, ndim_fault/))
 
-    ! ! read prior range of theta
-    ! if (myid == 0) then
-    !     open (17, file="data/range.dat", status="old")
-    !     do i = 1, ndim_fault
-    !         read (17, "(a)") ! param
-    !         read (17, *) range(1, i), range(2, i)
-    !     end do
-    !     close (17)
-    !     print *, "prior range"
-    !     do i = 1, nplane
-    !         print *, "fault plane: ", i
-    !         print *, "xf ", range(1, 8*i - 7), range(2, 8*i - 7)
-    !         print *, "yf ", range(1, 8*i - 6), range(2, 8*i - 6)
-    !         print *, "zf ", range(1, 8*i - 5), range(2, 8*i - 5)
-    !         print *, "strike ", range(1, 8*i - 4), range(2, 8*i - 4)
-    !         print *, "dip ", range(1, 8*i - 3), range(2, 8*i - 3)
-    !         print *, "lxi ", range(1, 8*i - 2), range(2, 8*i - 2)
-    !         print *, "leta ", range(1, 8*i - 1), range(2, 8*i - 1)
-    !         print *, "log_alpha2 ", range(1, 8*i - 0), range(2, 8*i - 0)
-    !     end do
-    !     print *, "log_sigma_sar2 ", range(1, 8*nplane + 1), range(2, 8*nplane + 1)
-    !     print *, "log_sigma_gnss2 ", range(1, 8*nplane + 2), range(2, 8*nplane + 2)
-    ! end if
-    ! call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
-    !                mpi_comm_world, ierr)
+    ! read prior range of theta
+    if (myid == 0) then
+        open (17, file="data/range.dat", status="old")
+        do i = 1, ndim_fault
+            read (17, "(a)") ! param
+            read (17, *) range(1, i), range(2, i)
+        end do
+        close (17)
+        print *, "prior range"
+        do i = 1, nplane
+            print *, "fault plane: ", i
+            print *, "xf ", range(1, 8*i - 7), range(2, 8*i - 7)
+            print *, "yf ", range(1, 8*i - 6), range(2, 8*i - 6)
+            print *, "zf ", range(1, 8*i - 5), range(2, 8*i - 5)
+            print *, "strike ", range(1, 8*i - 4), range(2, 8*i - 4)
+            print *, "dip ", range(1, 8*i - 3), range(2, 8*i - 3)
+            print *, "lxi ", range(1, 8*i - 2), range(2, 8*i - 2)
+            print *, "leta ", range(1, 8*i - 1), range(2, 8*i - 1)
+            print *, "log_alpha2 ", range(1, 8*i - 0), range(2, 8*i - 0)
+        end do
+        print *, "log_sigma_sar2 ", range(1, 8*nplane + 1), range(2, 8*nplane + 1)
+        print *, "log_sigma_gnss2 ", range(1, 8*nplane + 2), range(2, 8*nplane + 2)
+    end if
+    call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
+                   mpi_comm_world, ierr)
 
-    ! call fault_smc_exec( &
-    !     output_dir, range, nplane, nparticle_fault, ndim_fault, &
-    !     myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-    !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-    !     lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
-    !     obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
-    !     xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
-    !     response_dist, uobs, uret, slip_particles, &
-    !     slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
-    !     lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
-    !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
-    !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
-    !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
+    call fault_smc_exec( &
+        output_dir, range, nplane, nparticle_fault, ndim_fault, &
+        myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+        coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+        lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+        obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+        xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
+        response_dist, uobs, uret, slip_particles, &
+        slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
+        lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
+        slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+        slip_st_rand, slip_particle_cur, slip_particle_cand, &
+        slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
     call mpi_finalize(ierr)
 
 contains
