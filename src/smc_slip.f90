@@ -1035,14 +1035,14 @@ contains
 
         dtau_mean = 0d0
         ntau_mean = 0
-!$omp parallel do private(iparticle) reduction(+:dtau_mean)
+!$omp parallel do private(iparticle) reduction(+:dtau_mean, ntau_mean)
         do iparticle = 1, nparticle
             dtau_mean = dtau_mean + dtau_ls(iparticle)
             ntau_mean = ntau_mean + ntau_ls(iparticle)
         end do
 !$omp end parallel do
         dtau_mean = dtau_mean/d_nparticle
-        ntau_mean = ntau_mean/d_nparticle
+        ntau_mean = ntau_mean/nparticle
         log_dtau_upper = log(dtau_mean) + log(5d0)
         log_dtau_lower = log(dtau_mean) - log(5d0)
         ! ntau_upper = min(ntau_mean + 20, 100)
