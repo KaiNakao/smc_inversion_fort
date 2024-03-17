@@ -131,6 +131,7 @@ contains
             slip_particle_cand, slip_st_rand, neglog_sum)
         fault_calc_likelihood = neglog_sum
         en_time = omp_get_wtime()
+        ! print *, "slip_smc_exec time: ", en_time - st_time
     end function fault_calc_likelihood
 
     subroutine work_eval_init_particles(myid, work_size, nplane, ndim, particle_cur, &
@@ -479,9 +480,8 @@ contains
                              slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                              slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                              slip_particle_cand, slip_st_rand, 0, "")
+            ! likelihood_cur = work_likelihood_ls(iparticle)
             do jparticle = istart, istart + nassigned - 1
-                ! print *, "likelihood_cur: ", likelihood_cur
-                ! print *, "likelihood_cur: -> ", likelihood_cur
                 ! propose particle_cand
                 do idim = 1, ndim
                     call fault_box_muller(v1, v2)
@@ -790,10 +790,6 @@ contains
             end if
             iter = iter + 1
             call mpi_barrier(mpi_comm_world, ierr)
-            ! if (iter == 2) then
-            !     call mpi_finalize(ierr)
-            !     stop
-            ! end if
         end do
         if (myid == 0) then
             print *, "negative log of model evidence: ", fault_evidence

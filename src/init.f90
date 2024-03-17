@@ -184,7 +184,7 @@ contains
         ! laplacian for two components(u_xi, u_eta)
         do jnode = 1, 2*ndof
             do inode = 1, 2*nnode
-                lmat(inode, jnode) = 0.
+                lmat(inode, jnode) = 0d0
             end do
         end do
 
