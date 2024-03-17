@@ -853,11 +853,13 @@ contains
             id_start(iparticle + 1) = id_start(iparticle) + assigned_num(iparticle)
         end do
 
+        cnt = 0
         ! sampling from uniform distribution
         do iparticle = 1, nparticle, tuning_factor
             istart = id_start(iparticle)
             nassigned = assigned_num(iparticle)
             do jparticle = istart, istart + nassigned - 1
+                cnt = cnt + 1
                 call random_number(dtau)
                 ntau = int(ntau_lower + dtau*(ntau_upper - ntau_lower))
                 ntau_ls(jparticle) = ntau
@@ -867,6 +869,9 @@ contains
                 dtau_ls(jparticle) = dtau
             end do
         end do
+        if (cnt == 0) then
+            return
+        end if
 
         ! st_time = omp_get_wtime()
         ! ! do iparticle = 1, nparticle, tuning_factor
@@ -884,7 +889,7 @@ contains
         ! end do
         ! en_time = omp_get_wtime()
 
-        ! score_ls = 0d0
+        score_ls = -1d0
 !$omp parallel do private(&
 !$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
 !$omp prior_cur, post_cur, jparticle, particle_cand, st_rand, pvec, &
@@ -947,7 +952,7 @@ contains
             end do
         end do
 
-        sum_score = 0
+        sum_score = 0d0
 !$omp parallel do private(iparticle, istart, nassigned, jparticle) reduction(+:sum_score)
         do iparticle = 1, nparticle, tuning_factor
             istart = id_start(iparticle)
@@ -957,7 +962,6 @@ contains
             end do
         end do
 !$omp end parallel do
-        ! print *, "score_ls: ", score_ls
 
         ! if degenerated
         if (sum_score < 1d-5) then
@@ -1007,8 +1011,19 @@ contains
         end do
         if (cnt /= nparticle) then
             print *, "wrong: ", theta
+            print *, "cnt: ", cnt, "should be the same as ", nparticle
             print *, "score_ls: ", score_ls
             print *, "weights_hmc: ", weights_hmc
+            print *, "jparticle: "
+            do iparticle = 1, nparticle, tuning_factor
+                istart = id_start(iparticle)
+                nassigned = assigned_num(iparticle)
+                do jparticle = istart, istart + nassigned - 1
+                    print *, jparticle
+                end do
+            end do
+            print *, "jparticle: end"
+
             stop
         end if
 

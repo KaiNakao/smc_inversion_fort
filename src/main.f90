@@ -314,7 +314,7 @@ program main
 
     ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
     ! ! ! !       status="old")
-    ! open (10, file="data/theta.dat", status="old")
+    ! open (10, file="data/theta_.dat", status="old")
     ! ! open (10, file="mean_fault.dat", status="old")
     ! do i = 1, ndim_fault
     !     read (10, *) particle(i)
