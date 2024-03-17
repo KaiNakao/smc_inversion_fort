@@ -84,7 +84,8 @@ program main
     call random_seed(size=seedsize)
     allocate (seed(seedsize))
     do i = 1, seedsize
-        seed(i) = 10
+        seed(i) = myid*100
+        ! call system_clock(count=seed(i))
     end do
     call random_seed(put=seed)
 
@@ -290,30 +291,31 @@ program main
     ! do i = 1, ndim_fault + 1
     !     tmp(i) = 0d0
     ! end do
-    ! open (10, file="output_obs_1e4_1e3_3plane/48.csv", status='old')
-    ! ! open (10, file="output/26.csv", status='old')
-    ! do i = 1, nparticle_fault
-    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    !     read (10, *) tmp
-    !     do j = 1, ndim_fault
-    !         particle(j) = particle(j) + tmp(j)
-    !     end do
-    ! end do
-    ! close (10)
-    ! tmp = particle
-    ! do j = 1, ndim_fault
-    !     particle(j) = particle(j)/nparticle_fault
-    ! end do
-    ! open (10, file="mean_fault.dat", status="replace")
-    ! do i = 1, ndim_fault
-    !     write (10, *) particle(i)
-    ! end do
-    ! close (10)
+    ! ! open (10, file="output_obs_1e4_1e3_3plane/400.csv", status='old')
+    ! ! ! open (10, file="output/26.csv", status='old')
+    ! ! do i = 1, nparticle_fault
+    ! !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+    ! !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+    ! !     read (10, *) tmp
+    ! !     do j = 1, ndim_fault
+    ! !         particle(j) = particle(j) + tmp(j)
+    ! !     end do
+    ! ! end do
+    ! ! close (10)
+    ! ! tmp = particle
+    ! ! do j = 1, ndim_fault
+    ! !     particle(j) = particle(j)/nparticle_fault
+    ! ! end do
+    ! ! open (10, file="mean_fault.dat", status="replace")
+    ! ! do i = 1, ndim_fault
+    ! !     write (10, *) particle(i)
+    ! ! end do
+    ! ! close (10)
 
     ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
     ! ! ! !       status="old")
     ! open (10, file="data/theta.dat", status="old")
+    ! ! open (10, file="mean_fault.dat", status="old")
     ! do i = 1, ndim_fault
     !     read (10, *) particle(i)
     ! end do
@@ -334,6 +336,7 @@ program main
     !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
     !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
     !          slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat")
+    ! !  slip_particle_cand, slip_st_rand, 0, "output/slip_from_mean_fault.dat")
     ! en_time = omp_get_wtime()
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
