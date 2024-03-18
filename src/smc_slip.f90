@@ -1,19 +1,36 @@
 module smc_slip
+    use, intrinsic :: ieee_arithmetic
     use omp_lib
     implicit none
 contains
+    subroutine random_number_correction(x)
+        implicit none
+        double precision, intent(inout) :: x
+        call random_number(x)
+        if (x < 1d-5) then
+            x = 1d-5
+        end if
+    end subroutine random_number_correction
+
     subroutine slip_BoxMuller(p, q)
         implicit none
         double precision, intent(inout) :: p, q
         double precision :: pi, r, s
         pi = 2d0*asin(1d0)
         !   uniform random numbers between 0 and 1
-        call random_number(r)
-        call random_number(s)
+        call random_number_correction(r)
+        call random_number_correction(s)
         !   Gaussian random numbers,
         !   with weights proportional to eˆ{-pˆ2/2}and eˆ{-qˆ2/2}
         p = sqrt(-2d0*log(r))*sin(2d0*pi*s)
         q = sqrt(-2d0*log(r))*cos(2d0*pi*s)
+        if (ieee_is_nan(p)) then
+            print *, "nan in boxmuller"
+            print *, "pi: ", pi
+            print *, "r: ", r
+            print *, "s: ", s
+            stop
+        end if
     end subroutine slip_BoxMuller
 
     double precision function cdf_norm(x, mu, sigma2)
@@ -515,7 +532,7 @@ contains
         double precision :: d_nparticle, u
         d_nparticle = nparticle
         ! systematic residual resampling
-        call random_number(u)
+        call random_number_correction(u)
         u = u/d_nparticle
         do iparticle = 1, nparticle
             assigned_num(iparticle) = &
@@ -564,17 +581,16 @@ contains
         ! timer
         double precision :: st_time, en_time
 
-        ! st_time = omp_get_wtime()
-        ! do iparticle = 1, nparticle
-        !     do idim = 1, ndim
-        !         call slip_BoxMuller(v1, v2)
-        !         st_rand_ls(idim, iparticle) = v1
-        !     end do
-        !     call random_number(metropolis)
-        !     metropolis_ls(iparticle) = metropolis
-        ! end do
-        ! en_time = omp_get_wtime()
-        ! print *, "gen rand :", en_time - st_time
+        st_time = omp_get_wtime()
+        do iparticle = 1, nparticle
+            do idim = 1, ndim
+                call slip_BoxMuller(v1, v2)
+                st_rand_ls(idim, iparticle) = v1
+            end do
+            call random_number_correction(metropolis)
+            metropolis_ls(iparticle) = metropolis
+        end do
+        en_time = omp_get_wtime()
 
         id_start(1) = 1
         do iparticle = 1, nparticle - 1
@@ -614,6 +630,12 @@ contains
                 do idim = 1, ndim
                     st_rand(idim) = st_rand_ls(idim, jparticle)
                     pvec(idim) = st_rand(idim)/sqrt(cov_diag(idim))
+                    ! if (ieee_is_nan(pvec(idim))) then
+                    !     print *, "pvec is nan"
+                    !     print *, "st_rand: ",st_rand
+                    !     print *, "cov_diag: ", cov_diag
+                    !     stop
+                    ! end if
                 end do
                 call slip_leapfrog(ham_cur, post_cur, ndim, pvec, cov_diag, &
                                    particle_cand, dtau, ntau, grad, gmat, lmat_index, lmat_val, &
@@ -707,6 +729,13 @@ contains
                     pvec(idim) = -pvec(idim)
                 end if
             end do
+            ! if (ieee_is_nan(particle_cand(idim))) then
+            !     print *, "particle_cand is nan"
+            !     print *, "pvec: ", pvec
+            !     print *, "cov_diag: ", cov_diag
+            !     print *, "dtau: ", dtau
+            !     stop
+            ! end if
         end do
         do itau = 1, ntau
             ! call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
@@ -734,6 +763,12 @@ contains
                                 nobs, ndof, nnode, ndim, gsdvec, gsgmat)
             do idim = 1, ndim
                 pvec(idim) = pvec(idim) - grad(idim)*dtau
+                ! if (ieee_is_nan(pvec(idim))) then
+                !     print *, "pvec is nan"
+                !     print *, "grad: ", grad
+                !     print *, "dtau: ", dtau
+                !     stop
+                ! end if
             end do
             do idim = 1, ndim
                 particle_cand(idim) = particle_cand(idim) &
@@ -757,6 +792,13 @@ contains
                         pvec(idim) = -pvec(idim)
                     end if
                 end do
+                ! if (ieee_is_nan(particle_cand(idim))) then
+                !     print *, "particle_cand is nan"
+                !     print *, "pvec: ", pvec
+                !     print *, "cov_diag: ", cov_diag
+                !     print *, "dtau: ", dtau
+                !     stop
+                ! end if
             end do
         end do
         call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
@@ -765,6 +807,12 @@ contains
                             nobs, ndof, nnode, ndim, gsdvec, gsgmat)
         do idim = 1, ndim
             pvec(idim) = pvec(idim) - grad(idim)*5d-1*dtau
+            ! if (ieee_is_nan(pvec(idim))) then
+            !     print *, "pvec is nan"
+            !     print *, "grad: ", grad
+            !     print *, "dtau: ", dtau
+            !     stop
+            ! end if
         end do
         ! do idim = 1, ndim
         !     !   non negative constraints
@@ -824,6 +872,7 @@ contains
             st_rand_ls(:, :), metropolis_ls(:), particle_cur(:), &
             particle_cand(:), st_rand(:), gsvec(:), lsvec(:), dtau_ls(:), &
             log_dtau_upper, log_dtau_lower
+        
 
         integer, intent(inout) :: id_start(:), ntau_ls(:), ntau_upper, ntau_lower
         integer :: iparticle, jparticle, kparticle, idim, nassigned, istart, ierr
@@ -860,10 +909,10 @@ contains
             nassigned = assigned_num(iparticle)
             do jparticle = istart, istart + nassigned - 1
                 cnt = cnt + 1
-                call random_number(dtau)
+                call random_number_correction(dtau)
                 ntau = int(ntau_lower + dtau*(ntau_upper - ntau_lower))
                 ntau_ls(jparticle) = ntau
-                call random_number(log_dtau)
+                call random_number_correction(log_dtau)
                 log_dtau = log_dtau_lower + log_dtau*(log_dtau_upper - log_dtau_lower)
                 dtau = exp(log_dtau)
                 dtau_ls(jparticle) = dtau
@@ -873,21 +922,21 @@ contains
             return
         end if
 
-        ! st_time = omp_get_wtime()
-        ! ! do iparticle = 1, nparticle, tuning_factor
-        ! do iparticle = 1, nparticle
-        !     istart = id_start(iparticle)
-        !     nassigned = assigned_num(iparticle)
-        !     do jparticle = istart, istart + nassigned - 1
-        !         do idim = 1, ndim
-        !             call slip_BoxMuller(v1, v2)
-        !             st_rand_ls(idim, jparticle) = v1
-        !         end do
-        !         call random_number(metropolis)
-        !         metropolis_ls(jparticle) = metropolis
-        !     end do
-        ! end do
-        ! en_time = omp_get_wtime()
+        st_time = omp_get_wtime()
+        ! do iparticle = 1, nparticle, tuning_factor
+        do iparticle = 1, nparticle
+            istart = id_start(iparticle)
+            nassigned = assigned_num(iparticle)
+            do jparticle = istart, istart + nassigned - 1
+                do idim = 1, ndim
+                    call slip_BoxMuller(v1, v2)
+                    st_rand_ls(idim, jparticle) = v1
+                end do
+                call random_number_correction(metropolis)
+                metropolis_ls(jparticle) = metropolis
+            end do
+        end do
+        en_time = omp_get_wtime()
 
         score_ls = -1d0
 !$omp parallel do private(&
@@ -917,6 +966,12 @@ contains
                 do idim = 1, ndim
                     st_rand(idim) = st_rand_ls(idim, jparticle)
                     pvec(idim) = st_rand(idim)/sqrt(cov_diag(idim))
+                    ! if (ieee_is_nan(pvec(idim))) then
+                    !     print *, "pvec is nan"
+                    !     print *, "st_rand: ",st_rand
+                    !     print *, "cov_diag: ", cov_diag
+                    !     stop
+                    ! end if
                 end do
                 call slip_leapfrog(ham_cur, post_cur, ndim, pvec, cov_diag, &
                                    particle_cand, dtau, ntau, grad, gmat, lmat_index, lmat_val, &
@@ -933,6 +988,20 @@ contains
                 end do
                 ! score = score/ntau*exp(min(0d0, dham))
                 score = score*exp(min(0d0, dham))
+                if (ieee_is_nan(score)) then
+                    print *, "score is nan"
+                    print *, "particle_cand: ", particle_cand
+                    print *, "particle_cur: ", particle_cur
+                    print *, "pvec:", pvec
+                    print *, "cov_diag: ", cov_diag
+                    print *, "ham_cand: ", ham_cand
+                    print *, "ham_cur: ", ham_cur
+                    print *, "likelihood_cand: ", likelihood_cand
+                    print *, "likelihood_cur: ", likelihood_cur
+                    print *, "prior_cand: ", prior_cand
+                    print *, "prior_cur: ", prior_cur
+                    stop
+                end if
                 score_ls(jparticle) = score
 
                 !  metropolis test
@@ -977,6 +1046,7 @@ contains
             end do
 !$omp end parallel do
         end if
+        weights_hmc = -1d0
 !$omp parallel do private(iparticle, istart, nassigned, jparticle)
         do iparticle = 1, nparticle, tuning_factor
             istart = id_start(iparticle)
@@ -988,7 +1058,7 @@ contains
 !$omp end parallel do
 
         ! residual systematic resampling
-        call random_number(u)
+        call random_number_correction(u)
         nassigned_hmc = 0
         u = u/d_nparticle
         do iparticle = 1, nparticle, tuning_factor
@@ -1012,6 +1082,7 @@ contains
         if (cnt /= nparticle) then
             print *, "wrong: ", theta
             print *, "cnt: ", cnt, "should be the same as ", nparticle
+            print *, "sum_score: ", sum_score
             print *, "score_ls: ", score_ls
             print *, "weights_hmc: ", weights_hmc
             print *, "jparticle: "
@@ -1100,7 +1171,7 @@ contains
                 call slip_BoxMuller(v1, v2)
                 st_rand_ls(idim, iparticle) = v1
             end do
-            call random_number(metropolis)
+            call random_number_correction(metropolis)
             metropolis_ls(iparticle) = metropolis
         end do
 
@@ -1277,15 +1348,6 @@ contains
         ntau_upper = 100
         tuning_factor = 5
         iter = 0
-
-        do iparticle = 1, nparticle
-            do idim = 1, ndim
-                call slip_BoxMuller(v1, v2)
-                st_rand_ls(idim, iparticle) = v1
-            end do
-            call random_number(metropolis)
-            metropolis_ls(iparticle) = metropolis
-        end do
 
         call slip_calc_gsd_gsg(gmat, sigma2_full, dvec, gsdvec, gsgmat, nobs, ndof)
 

@@ -19,7 +19,7 @@ contains
             do idim = 1, ndim
                 xmin = range(1, idim)
                 xmax = range(2, idim)
-                call random_number(randr)
+                call random_number_correction(randr)
                 x = xmin + randr*(xmax - xmin)
                 particles(idim, iparticle) = x
             end do
@@ -191,8 +191,8 @@ contains
         double precision :: pi, r, s
         pi = 2d0*asin(1d0)
         ! uniform random numbers between 0 and 1
-        call random_number(r)
-        call random_number(s)
+        call random_number_correction(r)
+        call random_number_correction(s)
         ! Gaussian random numbers,
         ! with weights proportional to eˆ{-pˆ2/2}and eˆ{-qˆ2/2}
         p = sqrt(-2d0*log(r))*sin(2d0*pi*s)
@@ -372,7 +372,7 @@ contains
         double precision ::  d_nparticle, u
         d_nparticle = nparticle
         ! systematic residual resampling
-        call random_number(u)
+        call random_number_correction(u)
         u = u/d_nparticle
         ! for(iparticle=0 iparticle < nparticle iparticle + +) {
         do iparticle = 1, nparticle
@@ -517,7 +517,7 @@ contains
                                   slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                   slip_particle_cand, slip_st_rand, 0, "")
                 ! metropolis test and check domain of definition
-                call random_number(metropolis)
+                call random_number_correction(metropolis)
                 if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
