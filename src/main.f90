@@ -291,36 +291,36 @@ program main
     ! do i = 1, ndim_fault + 1
     !     tmp(i) = 0d0
     ! end do
-    ! ! open (10, file="output_obs_1e4_1e3_3plane/400.csv", status='old')
-    ! ! ! open (10, file="output/26.csv", status='old')
-    ! ! do i = 1, nparticle_fault
-    ! !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    ! !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    ! !     read (10, *) tmp
-    ! !     do j = 1, ndim_fault
-    ! !         particle(j) = particle(j) + tmp(j)
-    ! !     end do
-    ! ! end do
-    ! ! close (10)
-    ! ! tmp = particle
-    ! ! do j = 1, ndim_fault
-    ! !     particle(j) = particle(j)/nparticle_fault
-    ! ! end do
-    ! ! open (10, file="mean_fault.dat", status="replace")
-    ! ! do i = 1, ndim_fault
-    ! !     write (10, *) particle(i)
-    ! ! end do
-    ! ! close (10)
-
-    ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
-    ! ! ! !       status="old")
-    ! open (10, file="data/theta_.dat", status="old")
-    ! ! open (10, file="mean_fault.dat", status="old")
-    ! do i = 1, ndim_fault
-    !     read (10, *) particle(i)
+    ! open (10, file="64.csv", status='old')
+    ! ! open (10, file="output_obs_1e4_1e3_3plane_gaussian/57.csv", status='old')
+    ! do i = 1, nparticle_fault
+    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+    !     read (10, *) tmp
+    !     do j = 1, ndim_fault
+    !         particle(j) = particle(j) + tmp(j)
+    !     end do
     ! end do
     ! close (10)
-    ! print *, particle
+    ! tmp = particle
+    ! do j = 1, ndim_fault
+    !     particle(j) = particle(j)/nparticle_fault
+    ! end do
+    ! open (10, file="mean_fault.dat", status="replace")
+    ! do i = 1, ndim_fault
+    !     write (10, *) particle(i)
+    ! end do
+    ! close (10)
+
+    ! ! ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
+    ! ! ! ! ! !       status="old")
+    ! ! ! open (10, file="data/theta.dat", status="old")
+    ! ! open (10, file="mean_fault.dat", status="old")
+    ! ! do i = 1, ndim_fault
+    ! !     read (10, *) particle(i)
+    ! ! end do
+    ! ! close (10)
+    ! ! print *, particle
 
     ! st_time = omp_get_wtime()
     ! print *, "start"
@@ -341,63 +341,63 @@ program main
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
 
-    ! call calc_slip_map("output_obs_1e4_1e3/37.csv")
-    ! if (myid == 0) then
-    !     call point_cloud("output_obs_1e4_1e3_/37.csv", &
-    !                      "output/mapslip.dat")
-    ! end if
-
-    ! smc for fault
-    allocate (range(2, ndim_fault))
-    ! range of uniform prior distribution P(theta)
-    ! ! synthetic test
-    ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-    ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
-    ! !                       (/2, ndim_fault/))
-    ! ! real observation data
-    ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
-    !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
-    !                       (/2, ndim_fault/))
-
-    ! read prior range of theta
+    ! call calc_slip_map("64.csv")
     if (myid == 0) then
-        open (17, file="data/range.dat", status="old")
-        do i = 1, ndim_fault
-            read (17, "(a)") ! param
-            read (17, *) range(1, i), range(2, i)
-        end do
-        close (17)
-        print *, "prior range"
-        do i = 1, nplane
-            print *, "fault plane: ", i
-            print *, "xf ", range(1, 8*i - 7), range(2, 8*i - 7)
-            print *, "yf ", range(1, 8*i - 6), range(2, 8*i - 6)
-            print *, "zf ", range(1, 8*i - 5), range(2, 8*i - 5)
-            print *, "strike ", range(1, 8*i - 4), range(2, 8*i - 4)
-            print *, "dip ", range(1, 8*i - 3), range(2, 8*i - 3)
-            print *, "lxi ", range(1, 8*i - 2), range(2, 8*i - 2)
-            print *, "leta ", range(1, 8*i - 1), range(2, 8*i - 1)
-            print *, "log_alpha2 ", range(1, 8*i - 0), range(2, 8*i - 0)
-        end do
-        print *, "log_sigma_sar2 ", range(1, 8*nplane + 1), range(2, 8*nplane + 1)
-        print *, "log_sigma_gnss2 ", range(1, 8*nplane + 2), range(2, 8*nplane + 2)
+        call point_cloud("64.csv", &
+                         "output/mapslip.dat")
     end if
-    call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
-                   mpi_comm_world, ierr)
 
-    call fault_smc_exec( &
-        output_dir, range, nplane, nparticle_fault, ndim_fault, &
-        myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-        coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-        lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
-        obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
-        xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
-        response_dist, uobs, uret, slip_particles, &
-        slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
-        lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
-        slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
-        slip_st_rand, slip_particle_cur, slip_particle_cand, &
-        slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
+    ! ! smc for fault
+    ! allocate (range(2, ndim_fault))
+    ! ! range of uniform prior distribution P(theta)
+    ! ! ! synthetic test
+    ! ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
+    ! ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
+    ! ! !                       (/2, ndim_fault/))
+    ! ! ! real observation data
+    ! ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
+    ! !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
+    ! !                       (/2, ndim_fault/))
+
+    ! ! read prior range of theta
+    ! if (myid == 0) then
+    !     open (17, file="data/range.dat", status="old")
+    !     do i = 1, ndim_fault
+    !         read (17, "(a)") ! param
+    !         read (17, *) range(1, i), range(2, i)
+    !     end do
+    !     close (17)
+    !     print *, "prior range"
+    !     do i = 1, nplane
+    !         print *, "fault plane: ", i
+    !         print *, "xf ", range(1, 8*i - 7), range(2, 8*i - 7)
+    !         print *, "yf ", range(1, 8*i - 6), range(2, 8*i - 6)
+    !         print *, "zf ", range(1, 8*i - 5), range(2, 8*i - 5)
+    !         print *, "strike ", range(1, 8*i - 4), range(2, 8*i - 4)
+    !         print *, "dip ", range(1, 8*i - 3), range(2, 8*i - 3)
+    !         print *, "lxi ", range(1, 8*i - 2), range(2, 8*i - 2)
+    !         print *, "leta ", range(1, 8*i - 1), range(2, 8*i - 1)
+    !         print *, "log_alpha2 ", range(1, 8*i - 0), range(2, 8*i - 0)
+    !     end do
+    !     print *, "log_sigma_sar2 ", range(1, 8*nplane + 1), range(2, 8*nplane + 1)
+    !     print *, "log_sigma_gnss2 ", range(1, 8*nplane + 2), range(2, 8*nplane + 2)
+    ! end if
+    ! call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
+    !                mpi_comm_world, ierr)
+
+    ! call fault_smc_exec( &
+    !     output_dir, range, nplane, nparticle_fault, ndim_fault, &
+    !     myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+    !     lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+    !     obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+    !     xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
+    !     response_dist, uobs, uret, slip_particles, &
+    !     slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
+    !     lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
+    !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+    !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
+    !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
     call mpi_finalize(ierr)
 
 contains
@@ -409,6 +409,9 @@ contains
             work_fault_particles(:, :), mean_slip(:, :), &
             work_mean_slip(:, :), particle_slip(:)
         integer :: work_size, k, inode, idirection, iparticle, idim, idof
+        integer :: stride
+
+        stride = 100
 
         slip_filepath = "output/mapslip.dat"
         allocate (slip(2, nnode))
@@ -419,7 +422,9 @@ contains
             allocate (tmp(ndim_fault + 1))
             open (10, file=fault_filepath, status='old')
             do i = 1, nparticle_fault
-                read (10, *) tmp
+                do k = 1, stride
+                    read (10, *) tmp
+                end do
                 do j = 1, ndim_fault
                     fault_particles(j, i) = tmp(j)
                 end do
@@ -513,14 +518,24 @@ contains
             xf, yf, zf, strike, dip, lxi, leta, dip_rad, strike_rad, &
             theta(ndim_fault)
 
-        integer :: ie, iparticle, idim, inode, ir1, ir2, iplane, jnode, idpoint, cnt, stride
+        integer :: ie, iparticle, idim, inode, ir1, ir2, iplane, jnode, idpoint, cnt, stride, k
         double precision :: pi = 4d0*atan(1d0)
 
-        stride = 1
+        integer :: nr = 4, ir
+        double precision, allocatable :: r1vec_cloud(:), r2vec_cloud(:)
+
+        allocate(r1vec_cloud(nr))
+        allocate(r2vec_cloud(nr))
+        do ir = 1, nr
+            r1vec_cloud(ir) = -1d0 + 2d0 / dble(nr)
+            r2vec_cloud(ir) = -1d0 + 2d0 / dble(nr)
+        end do
+
+        stride = 100
         points_filepath = "output/points.dat"
         allocate (fault_particles(ndim_fault, nparticle_fault))
         ! x, y, z, uxi, ueta, unorm
-        allocate (points(6, nparticle_fault*npatch*4))
+        allocate (points(6, nparticle_fault*npatch*nr**2))
         allocate (mean_slip(2*nnode, nparticle_fault))
         allocate (tmp(ndim_fault + 1))
         allocate (particle(ndim_fault))
@@ -528,7 +543,9 @@ contains
         open (10, file=fault_filepath, status='old')
         open (11, file=slip_filepath, status='old')
         do i = 1, nparticle_fault
-            read (10, *) tmp
+            do k = 1, stride
+                read (10, *) tmp
+            end do
             read (11, *) mean_slip(:, i)
             do j = 1, ndim_fault
                 fault_particles(j, i) = tmp(j)
@@ -538,7 +555,8 @@ contains
         close (11)
 
         cnt = 1
-        do iparticle = 1, nparticle_fault, stride
+        do iparticle = 1, nparticle_fault
+            print *, "iparticle: ", iparticle
             slip_dist = reshape(mean_slip(:, iparticle), (/2, nnode/))
             do idim = 1, ndim_fault
                 particle(idim) = fault_particles(idim, iparticle)
@@ -547,42 +565,17 @@ contains
             call discretize_fault(particle, nplane, nxi, neta, cny_fault, coor_fault, &
                                   node_to_elem_val, node_to_elem_size, id_dof)
 
-            r1vec(1) = -0.5d0
-            r1vec(2) = 0.5d0
-            r2vec(1) = -0.5d0
-            r2vec(2) = 0.5d0
             ! loop for patchs
             do iplane = 1, nplane
-                xf = particle(1)
-                yf = particle(2)
-                zf = particle(3)
-                strike = particle(4)
+                xf = particle(8*(iplane-1)+1)
+                yf = particle(8*(iplane-1)+2)
+                zf = particle(8*(iplane-1)+3)
+                strike = particle(8*(iplane-1)+4)
                 strike_rad = strike*pi/180d0
-                dip = particle(5)
+                dip = particle(8*(iplane-1)+5)
                 dip_rad = dip*pi/180d0
-                lxi = particle(6)
-                leta = particle(7)
-                if (iplane == 2) then
-                    xf = xf - leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-                    yf = yf + leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-                    zf = zf + leta/2d0*sin(dip_rad)
-
-                    xf = xf + particle(9)
-                    yf = yf + particle(10)
-                    zf = zf + particle(11)
-
-                    strike = strike + particle(12)
-                    strike_rad = strike*pi/180d0
-                    dip = dip + particle(13)
-                    dip_rad = dip*pi/180d0
-                    lxi = particle(14)
-                    leta = particle(15)
-
-                    xf = xf + leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-                    yf = yf - leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-                    zf = zf - leta/2d0*sin(dip_rad)
-                end if
-
+                lxi = particle(8*(iplane-1)+6)
+                leta = particle(8*(iplane-1)+7)
                 do ie = 1 + nxi*neta*(iplane - 1), nxi*neta*iplane
                     do inode = 1, 4
                         node_id_in_patch(inode) = cny_fault(inode, ie)
@@ -597,10 +590,10 @@ contains
                     end do
 
                     !   loop for point sources
-                    do ir1 = 1, 2
-                        r1 = r1vec(ir1)
-                        do ir2 = 1, 2
-                            r2 = r2vec(ir2)
+                    do ir1 = 1, nr
+                        r1 = r1vec_cloud(ir1)
+                        do ir2 = 1, nr
+                            r2 = r2vec_cloud(ir2)
                             !   interpolate(xi, eta, uxi, ueta) by shape functions
                             nvec(1) = (1d0 - r1)*(1d0 - r2)/4d0
                             nvec(2) = (1d0 + r1)*(1d0 - r2)/4d0
@@ -639,7 +632,7 @@ contains
         end do
 
         open (10, file=points_filepath, status='replace')
-        do i = 1, nparticle_fault*npatch*4/stride
+        do i = 1, nparticle_fault*npatch*nr**2
             do j = 1, 6
                 write (10, "(f12.5)", advance="no") points(j, i)
             end do

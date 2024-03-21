@@ -24,13 +24,6 @@ contains
         !   with weights proportional to eˆ{-pˆ2/2}and eˆ{-qˆ2/2}
         p = sqrt(-2d0*log(r))*sin(2d0*pi*s)
         q = sqrt(-2d0*log(r))*cos(2d0*pi*s)
-        if (ieee_is_nan(p)) then
-            print *, "nan in boxmuller"
-            print *, "pi: ", pi
-            print *, "r: ", r
-            print *, "s: ", s
-            stop
-        end if
     end subroutine slip_BoxMuller
 
     double precision function cdf_norm(x, mu, sigma2)
@@ -69,8 +62,11 @@ contains
         call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
                    nobs, svec, 1, 0d0, gsvec, 1)
 
-        slip_calc_likelihood = nsar*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
+        ! slip_calc_likelihood = nsar*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
+        slip_calc_likelihood = 0d0
         do i = 1, nobs
+            slip_calc_likelihood = slip_calc_likelihood + &
+                                    log(sigma2_full(i)) / 2d0
             slip_calc_likelihood = slip_calc_likelihood + &
                                    (dvec(i) - gsvec(i))**2d0/(2d0*sigma2_full(i))
         end do
@@ -228,8 +224,8 @@ contains
                     y_prev = y_i
                     cnt = cnt + 1
                 end do
-                y_i = min(y_i, max_slip)
-                y_i = max(y_i, 0d0)
+                ! y_i = min(y_i, max_slip)
+                ! y_i = max(y_i, 0d0)
                 particle_cur(idim) = y_i
             end do
             do idim = 1, ndim
@@ -715,7 +711,7 @@ contains
                 ham_cand = 1d20
                 return
             end if
-            ! reflection
+            ! ! reflection
             do while (particle_cand(idim) < 0d0 .or. &
                       particle_cand(idim) > max_slip)
                 if (particle_cand(idim) > max_slip) then
@@ -1342,7 +1338,8 @@ contains
         double precision :: metropolis, v1, v2
 
         output_dir = "./output_slip/"
-        log_dtau_upper = 1d1
+        ! log_dtau_upper = 1d1
+        log_dtau_upper = 0d0
         log_dtau_lower = -1d1
         ntau_lower = 1
         ntau_upper = 100
@@ -1385,7 +1382,6 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
-            ! print *, "gamma: ", gamma
             neglog_ret = neglog_ret + neglog_evidence
             if (iter > 200) then
                 neglog_ret = 1d10
