@@ -99,11 +99,11 @@ contains
                     do k = 1, 4
                         node_to_elem_val(k, node_id) = -1
                     end do
-                    ! no degree of freedom on the edge of the fault
-                    if (i == 1 .or. i == nxi + 1 .or. &
-                        j == 1 .or. j == neta + 1) then
-                        cycle
-                    end if
+                    ! ! no degree of freedom on the edge of the fault
+                    ! if (i == 1 .or. i == nxi + 1 .or. &
+                    !     j == 1 .or. j == neta + 1) then
+                    !     cycle
+                    ! end if
                     id_dof(cnt) = node_id
                     cnt = cnt + 1
                 end do

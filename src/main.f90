@@ -141,7 +141,8 @@ program main
     ! number of patches, nodes, dof
     npatch = nxi*neta*nplane
     nnode = (nxi + 1)*(neta + 1)*nplane
-    ndof = (nxi - 1)*(neta - 1)*nplane
+    ndof = nnode
+    ! ndof = (nxi - 1)*(neta - 1)*nplane
 
     ! dimension of fault parameter
     ndim_fault = 2 + 8*nplane
@@ -282,17 +283,17 @@ program main
     ! end do
     ! print *, "variance reduction: ", 1d0 - dtmp1/dtmp2
 
-    ! ! calculate likelihood for given fault
-    ! allocate (particle(ndim_fault))
-    ! allocate (tmp(ndim_fault + 1))
-    ! do i = 1, ndim_fault
-    !     particle(i) = 0d0
-    ! end do
-    ! do i = 1, ndim_fault + 1
-    !     tmp(i) = 0d0
-    ! end do
+    ! calculate likelihood for given fault
+    allocate (particle(ndim_fault))
+    allocate (tmp(ndim_fault + 1))
+    do i = 1, ndim_fault
+        particle(i) = 0d0
+    end do
+    do i = 1, ndim_fault + 1
+        tmp(i) = 0d0
+    end do
     ! open (10, file="64.csv", status='old')
-    ! ! open (10, file="output_obs_1e4_1e3_3plane_gaussian/57.csv", status='old')
+    ! ! open (10, file="output_obs_delbc/18.csv", status='old')
     ! do i = 1, nparticle_fault
     !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
     !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
@@ -312,40 +313,40 @@ program main
     ! end do
     ! close (10)
 
-    ! ! ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
-    ! ! ! ! ! !       status="old")
-    ! ! ! open (10, file="data/theta.dat", status="old")
-    ! ! open (10, file="mean_fault.dat", status="old")
-    ! ! do i = 1, ndim_fault
-    ! !     read (10, *) particle(i)
-    ! ! end do
-    ! ! close (10)
-    ! ! print *, particle
+    ! ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
+    ! ! ! ! !       status="old")
+    ! ! open (10, file="data/theta.dat", status="old")
+    open (10, file="mean_fault.dat", status="old")
+    do i = 1, ndim_fault
+        read (10, *) particle(i)
+    end do
+    close (10)
+    print *, particle
 
-    ! st_time = omp_get_wtime()
-    ! print *, "start"
-    ! neglog = fault_calc_likelihood( &
-    !          particle, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-    !          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-    !          lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
-    !          obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
-    !          xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
-    !          uobs, uret, slip_particles, slip_particles_new, &
-    !          nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
-    !          slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
-    !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
-    !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-    !          slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat")
-    ! !  slip_particle_cand, slip_st_rand, 0, "output/slip_from_mean_fault.dat")
-    ! en_time = omp_get_wtime()
-    ! print *, "etime: ", en_time - st_time
-    ! print *, "neglog: ", neglog
+    st_time = omp_get_wtime()
+    print *, "start"
+    neglog = fault_calc_likelihood( &
+             particle, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+             coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+             lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+             obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+             xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+             uobs, uret, slip_particles, slip_particles_new, &
+             nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
+             slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
+             slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+             slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+             slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat")
+    !  slip_particle_cand, slip_st_rand, 0, "output/slip_from_mean_fault.dat")
+    en_time = omp_get_wtime()
+    print *, "etime: ", en_time - st_time
+    print *, "neglog: ", neglog
 
     ! call calc_slip_map("64.csv")
-    if (myid == 0) then
-        call point_cloud("64.csv", &
-                         "output/mapslip.dat")
-    end if
+    ! if (myid == 0) then
+    !     call point_cloud("64.csv", &
+    !                      "output/mapslip.dat")
+    ! end if
 
     ! ! smc for fault
     ! allocate (range(2, ndim_fault))

@@ -269,8 +269,10 @@ contains
             leta = theta(8*iplane - 1)
 
             ! loop for each degree of freedom of slip
-            do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &
-                (nxi - 1)*(neta - 1)*iplane
+            ! do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &
+            !     (nxi - 1)*(neta - 1)*iplane
+            do idof = 1 + (nxi + 1)*(neta + 1)*(iplane - 1), &
+                (nxi + 1)*(neta + 1)*iplane
                 inode = id_dof(idof)
                 target_id_size = node_to_elem_size(inode)
                 do itarget = 1, target_id_size

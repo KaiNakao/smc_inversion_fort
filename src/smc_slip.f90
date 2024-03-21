@@ -65,11 +65,12 @@ contains
         ! slip_calc_likelihood = nsar*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
         slip_calc_likelihood = 0d0
         do i = 1, nobs
-            slip_calc_likelihood = slip_calc_likelihood + &
+            slip_calc_likelihood = slip_calc_likelihood + & 
                                     log(sigma2_full(i)) / 2d0
             slip_calc_likelihood = slip_calc_likelihood + &
                                    (dvec(i) - gsvec(i))**2d0/(2d0*sigma2_full(i))
         end do
+        ! print *, "likelihood: ", slip_calc_likelihood
     end function slip_calc_likelihood
 
     double precision function slip_calc_prior(svec, alpha2_full, theta, nplane, nxi, neta, &
@@ -96,11 +97,11 @@ contains
         end do
 
         slip_calc_prior = 0d0
-        do i = 1, nplane
-            log_alpha2 = theta(8*i)
-            slip_calc_prior = slip_calc_prior + &
-                              2d0*(nxi + 1)*(neta + 1)*log_alpha2/2d0
-        end do
+        ! do i = 1, nplane
+        !     log_alpha2 = theta(8*i)
+        !     slip_calc_prior = slip_calc_prior + &
+        !                       2d0*(nxi + 1)*(neta + 1)*log_alpha2/2d0
+        ! end do
         do i = 1, n
             slip_calc_prior = slip_calc_prior + lsvec(i)**2d0/(2d0*alpha2_full(i))
         end do
@@ -208,8 +209,10 @@ contains
                 call slip_BoxMuller(v1, v2)
                 x = mu_i + v1*sqrt(sigma2_i)
                 fx = cdf_norm(x, mu_i, sigma2_i)
-                f1 = cdf_norm(max_slip, mu_i, sigma2_i)
-                f0 = cdf_norm(0d0, mu_i, sigma2_i)
+                ! f1 = cdf_norm(max_slip, mu_i, sigma2_i)
+                ! f0 = cdf_norm(0d0, mu_i, sigma2_i)
+                f1 = cdf_norm(1d6, mu_i, sigma2_i)
+                f0 = cdf_norm(-1d6, mu_i, sigma2_i)
 
                 ! solve F(y) = (F(1) - F(0)) F(x) + F(0) by Newton's method
                 ! where F(:) is CDF of normal distribution
@@ -712,19 +715,19 @@ contains
                 return
             end if
             ! ! reflection
-            do while (particle_cand(idim) < 0d0 .or. &
-                      particle_cand(idim) > max_slip)
-                if (particle_cand(idim) > max_slip) then
-                    particle_cand(idim) = &
-                        2*max_slip - particle_cand(idim)
-                    pvec(idim) = -pvec(idim)
-                end if
-                if (particle_cand(idim) < 0d0) then
-                    particle_cand(idim) = &
-                        -particle_cand(idim)
-                    pvec(idim) = -pvec(idim)
-                end if
-            end do
+            ! do while (particle_cand(idim) < 0d0 .or. &
+            !           particle_cand(idim) > max_slip)
+            !     if (particle_cand(idim) > max_slip) then
+            !         particle_cand(idim) = &
+            !             2*max_slip - particle_cand(idim)
+            !         pvec(idim) = -pvec(idim)
+            !     end if
+            !     if (particle_cand(idim) < 0d0) then
+            !         particle_cand(idim) = &
+            !             -particle_cand(idim)
+            !         pvec(idim) = -pvec(idim)
+            !     end if
+            ! end do
             ! if (ieee_is_nan(particle_cand(idim))) then
             !     print *, "particle_cand is nan"
             !     print *, "pvec: ", pvec
@@ -734,25 +737,27 @@ contains
             ! end if
         end do
         do itau = 1, ntau
-            ! call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-            !                     ltmat_index, ltmat_val, dvec, 5d-1, &
-            !                     gsvec, lsvec, sigma2_full, alpha2_full, &
-            !                     nobs, ndof, nnode, ndim, gsdvec, gsgmat)
-            ! do idim = 1, ndim
-            !     particle_cand(idim) = particle_cand(idim) - 1d-8
-            !     dtmp1 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
-            !                                       log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
-            !     dtmp1 = dtmp1 + slip_calc_prior(particle_cand, alpha2_full, &
-            !                                     theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
-            !     particle_cand(idim) = particle_cand(idim) + 2d-8
-            !     dtmp2 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
-            !                                       log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
-            !     dtmp2 = dtmp2 + slip_calc_prior(particle_cand, alpha2_full, &
-            !                                     theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
-            !     particle_cand(idim) = particle_cand(idim) - 1d-8
-            !     print *, (dtmp2 - dtmp1)/2d-8, grad(idim)
-            ! end do
-            ! stop
+            call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
+                                ltmat_index, ltmat_val, dvec, 5d-1, &
+                                gsvec, lsvec, sigma2_full, alpha2_full, &
+                                nobs, ndof, nnode, ndim, gsdvec, gsgmat)
+            
+            print *, "check gradient"
+            do idim = 1, ndim
+                particle_cand(idim) = particle_cand(idim) - 1d-8
+                dtmp1 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
+                                                  log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
+                dtmp1 = dtmp1 + slip_calc_prior(particle_cand, alpha2_full, &
+                                                theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
+                particle_cand(idim) = particle_cand(idim) + 2d-8
+                dtmp2 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
+                                                  log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
+                dtmp2 = dtmp2 + slip_calc_prior(particle_cand, alpha2_full, &
+                                                theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
+                particle_cand(idim) = particle_cand(idim) - 1d-8
+                print *, (dtmp2 - dtmp1)/2d-8, grad(idim)
+            end do
+            stop
             call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
                                 ltmat_index, ltmat_val, dvec, gamma, &
                                 gsvec, lsvec, sigma2_full, alpha2_full, &
@@ -774,20 +779,20 @@ contains
                     ham_cand = 1d20
                     return
                 end if
-                ! reflection
-                do while (particle_cand(idim) < 0d0 .or. &
-                          particle_cand(idim) > max_slip)
-                    if (particle_cand(idim) > max_slip) then
-                        particle_cand(idim) = &
-                            2*max_slip - particle_cand(idim)
-                        pvec(idim) = -pvec(idim)
-                    end if
-                    if (particle_cand(idim) < 0d0) then
-                        particle_cand(idim) = &
-                            -particle_cand(idim)
-                        pvec(idim) = -pvec(idim)
-                    end if
-                end do
+                ! ! reflection
+                ! do while (particle_cand(idim) < 0d0 .or. &
+                !           particle_cand(idim) > max_slip)
+                !     if (particle_cand(idim) > max_slip) then
+                !         particle_cand(idim) = &
+                !             2*max_slip - particle_cand(idim)
+                !         pvec(idim) = -pvec(idim)
+                !     end if
+                !     if (particle_cand(idim) < 0d0) then
+                !         particle_cand(idim) = &
+                !             -particle_cand(idim)
+                !         pvec(idim) = -pvec(idim)
+                !     end if
+                ! end do
                 ! if (ieee_is_nan(particle_cand(idim))) then
                 !     print *, "particle_cand is nan"
                 !     print *, "pvec: ", pvec
@@ -1382,6 +1387,7 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
+            print *, "gamma: ", gamma
             neglog_ret = neglog_ret + neglog_evidence
             if (iter > 200) then
                 neglog_ret = 1d10
