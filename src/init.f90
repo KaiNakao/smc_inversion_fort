@@ -63,103 +63,84 @@ contains
         close (10)
     end subroutine read_observation2
 
-    subroutine discretize_fault(lxi, leta, nxi, neta, cny, coor, &
+    subroutine discretize_fault(theta, nplane, nxi, neta, cny, coor, &
                                 node_to_elem_val, node_to_elem_size, id_dof)
         implicit none
-        double precision, intent(in) :: lxi, leta
-        integer, intent(in) :: nxi, neta
+        double precision, intent(in) :: theta(:)
+        integer, intent(in) :: nplane, nxi, neta
         double precision, intent(inout) :: coor(:, :)
         integer, intent(inout) :: cny(:, :), &
                                   node_to_elem_val(:, :), &
                                   node_to_elem_size(:), &
                                   id_dof(:)
-        integer :: i, j, k, cnt, node_id, patch_id
+        integer :: i, j, k, cnt, node_id, patch_id, iplane
         integer :: node1, node2, node3, node4
-        double precision :: xi, eta, dxi, deta
-        ! length of a patch
-        dxi = lxi/nxi
-        deta = leta/neta
+        double precision :: xi, eta, dxi, deta, lxi, leta
 
-        ! coordinate of nodes
         cnt = 1
-        do i = 1, nxi + 1
+        do iplane = 1, nplane
+            lxi = theta(iplane*8 - 2)
+            leta = theta(iplane*8 - 1)
+            ! length of a patch
+            dxi = lxi/nxi
+            deta = leta/neta
+
+            ! coordinate of nodes
             do j = 1, neta + 1
-                node_id = i + (nxi + 1)*(j - 1)
-                xi = (i - 1)*dxi - lxi/2d0
-                eta = (j - 1)*deta - leta/2d0
-                coor(1, node_id) = xi
-                coor(2, node_id) = eta
+                do i = 1, nxi + 1
+                    node_id = i + (nxi + 1)*(j - 1) &
+                              + (iplane - 1)*(nxi + 1)*(neta + 1)
+                    xi = (i - 1)*dxi - lxi/2d0
+                    eta = (j - 1)*deta - leta/2d0
+                    coor(1, node_id) = xi
+                    coor(2, node_id) = eta
 
-                node_to_elem_size(node_id) = 0
-                do k = 1, 4
-                    node_to_elem_val(k, node_id) = -1
+                    node_to_elem_size(node_id) = 0
+                    do k = 1, 4
+                        node_to_elem_val(k, node_id) = -1
+                    end do
+                    ! no degree of freedom on the edge of the fault
+                    if (i == 1 .or. i == nxi + 1 .or. &
+                        j == 1 .or. j == neta + 1) then
+                        cycle
+                    end if
+                    id_dof(cnt) = node_id
+                    cnt = cnt + 1
                 end do
-                ! no degree of freedom on the edge of the fault
-                if (i == 1 .or. i == nxi + 1 .or. &
-                    j == 1 .or. j == neta + 1) then
-                    cycle
-                end if
-                id_dof(cnt) = node_id
-                cnt = cnt + 1
             end do
-        end do
 
-        ! node id of patches
-        !  for (i = 0 i < nxi i++) {
-        do i = 1, nxi
-            !      for (j = 0 j < neta j++) {
+            ! node id of patches
             do j = 1, neta
-                patch_id = i + nxi*(j - 1)
-                node1 = i + (nxi + 1)*(j - 1)
-                node2 = node1 + 1
-                node3 = node2 + nxi + 1
-                node4 = node1 + nxi + 1
-                cny(1, patch_id) = node1
-                cny(2, patch_id) = node2
-                cny(3, patch_id) = node3
-                cny(4, patch_id) = node4
-                do k = 1, 4
-                    node_id = cny(k, patch_id)
-                    node_to_elem_size(node_id) = node_to_elem_size(node_id) + 1
-                    node_to_elem_val(node_to_elem_size(node_id), node_id) &
-                        = patch_id
+                do i = 1, nxi
+                    patch_id = i + nxi*(j - 1) &
+                               + (iplane - 1)*nxi*neta
+                    node1 = i + (nxi + 1)*(j - 1) &
+                            + (iplane - 1)*(nxi + 1)*(neta + 1)
+                    node2 = node1 + 1
+                    node3 = node2 + nxi + 1
+                    node4 = node1 + nxi + 1
+                    cny(1, patch_id) = node1
+                    cny(2, patch_id) = node2
+                    cny(3, patch_id) = node3
+                    cny(4, patch_id) = node4
+                    do k = 1, 4
+                        node_id = cny(k, patch_id)
+                        node_to_elem_size(node_id) = node_to_elem_size(node_id) + 1
+                        node_to_elem_val(node_to_elem_size(node_id), node_id) &
+                            = patch_id
+                    end do
                 end do
             end do
         end do
-
-        !  // for (node_id = 0 node_id < (nxi + 1) * (neta + 1) node_id++) {
-        !  //     printf("node_id: %d,    %d, %d, %d, %d num: %d\n", node_id,
-        !  //            node_to_elem_val(4 * node_id + 0),
-        !  //            node_to_elem_val(4 * node_id + 1),
-        !  //            node_to_elem_val(4 * node_id + 2),
-        !  //            node_to_elem_val(4 * node_id + 3),
-        !  //            node_to_elem_size(node_id))
-        !  // }
-        !  return
-        ! do patch_id = 1, (nxi)*(neta)
-        !    node1 = cny(1, patch_id)
-        !    node2 = cny(2, patch_id)
-        !    node3 = cny(3, patch_id)
-        !    node4 = cny(4, patch_id)
-        !    print *, coor(:, node1), " | ", coor(:, node2), " | ", &
-        !       coor(:, node3), " | ", coor(:, node4)
-        ! end do
-        ! do node_id = 1, (nxi + 1)*(neta + 1)
-        !    print *, node_to_elem_size(node_id), &
-        !       node_to_elem_val(1, node_id), &
-        !       node_to_elem_val(2, node_id), &
-        !       node_to_elem_val(3, node_id), &
-        !       node_to_elem_val(4, node_id)
-        ! end do
     end subroutine discretize_fault
 
-    subroutine gen_laplacian(nnode, nxi, neta, dxi, deta, &
-                             id_dof, ndof, luni, lmat)
+    subroutine gen_laplacian(theta, nplane, nnode, nxi, neta, id_dof, ndof, luni, lmat)
         implicit none
-        integer, intent(in) :: nnode, nxi, neta, id_dof(:), ndof
-        double precision, intent(in) :: dxi, deta
-        double precision, intent(inout) :: luni(:, :), lmat(:, :)
-        integer :: inode, idof, jnode
+        integer, intent(in) :: nplane, nnode, nxi, neta, id_dof(:), ndof
+        double precision, intent(in) :: theta(:)
+        double precision, intent(inout) ::  luni(:, :), lmat(:, :)
+        double precision :: dxi, deta, lxi, leta
+        integer :: iplane, inode, idof, jnode
         ! laplacian for single component
         do jnode = 1, nnode
             do inode = 1, nnode
@@ -167,36 +148,43 @@ contains
             end do
         end do
 
-        do inode = 1, nnode
-            if (mod(inode - 1, nxi + 1) == 0) then
-                luni(inode, inode + 1) = luni(inode, inode + 1) + 2d0/dxi**2d0
-                luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
-            else if (mod(inode - 1, nxi + 1) == nxi) then
-                luni(inode, inode - 1) = luni(inode, inode - 1) + 2d0/dxi**2d0
-                luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
-            else
-                luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2d0
-                luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2d0
-                luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
-            end if
+        do iplane = 1, nplane
+            lxi = theta(iplane*8 - 2)
+            leta = theta(iplane*8 - 1)
+            dxi = lxi/nxi
+            deta = leta/neta
+            do inode = &
+                1 + (nxi + 1)*(neta + 1)*(iplane - 1), (nxi + 1)*(neta + 1)*iplane
+                if (mod(inode - 1, nxi + 1) == 0) then
+                    luni(inode, inode + 1) = luni(inode, inode + 1) + 2d0/dxi**2d0
+                    luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
+                else if (mod(inode - 1, nxi + 1) == nxi) then
+                    luni(inode, inode - 1) = luni(inode, inode - 1) + 2d0/dxi**2d0
+                    luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
+                else
+                    luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2d0
+                    luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2d0
+                    luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
+                end if
 
-            if ((inode - 1)/(nxi + 1) == 0) then
-                luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 2d0/deta**2d0
-                luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
-            else if ((inode - 1)/(nxi + 1) == neta) then
-                luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 2d0/deta**2d0
-                luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
-            else
-                luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2d0
-                luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2d0
-                luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
-            end if
+                if (mod((inode - 1)/(nxi + 1), neta + 1) == 0) then
+                    luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 2d0/deta**2d0
+                    luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
+                else if (mod((inode - 1)/(nxi + 1), neta + 1) == neta) then
+                    luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 2d0/deta**2d0
+                    luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
+                else
+                    luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2d0
+                    luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2d0
+                    luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
+                end if
+            end do
         end do
 
-        ! //laplacian for two components(u_xi, u_eta)
+        ! laplacian for two components(u_xi, u_eta)
         do jnode = 1, 2*ndof
             do inode = 1, 2*nnode
-                lmat(inode, jnode) = 0.
+                lmat(inode, jnode) = 0d0
             end do
         end do
 
@@ -209,22 +197,22 @@ contains
         end do
     end subroutine
 
-    subroutine gen_sparse_lmat(lmat, lmat_index, lmat_val, nnode, ndof)
+    subroutine gen_sparse_lmat(lmat, lmat_index, lmat_val, ltmat_index, &
+                               ltmat_val, nnode, ndof)
         implicit none
         integer, intent(in) :: nnode, ndof
         double precision, intent(in) :: lmat(:, :)
-        integer, intent(inout) :: lmat_index(:, :)
-        double precision, intent(inout) :: lmat_val(:, :)
+        integer, intent(inout) :: lmat_index(:, :), ltmat_index(:, :)
+        double precision, intent(inout) :: lmat_val(:, :), ltmat_val(:, :)
         integer ::  i, j, cnt
         double precision :: val
-        ! for(i=0 i < 2*nnode i + +) {
+
+        ! sparse matrix of L
         do i = 1, 2*nnode
             cnt = 0
-            ! for(j=0 j < 2*ndof j + +) {
             do j = 1, 2*ndof
                 val = lmat(i, j)
                 if (abs(val) > 1d-8) then
-                    ! //std::cout <  < j <  < " "
                     cnt = cnt + 1
                     lmat_index(cnt, i) = j
                     lmat_val(cnt, i) = val
@@ -234,6 +222,24 @@ contains
                 cnt = cnt + 1
                 lmat_index(cnt, i) = 1
                 lmat_val(cnt, i) = 0d0
+            end do
+        end do
+
+        ! sparse matrix of L^T
+        do i = 1, 2*ndof
+            cnt = 0
+            do j = 1, 2*nnode
+                val = lmat(j, i)
+                if (abs(val) > 1d-8) then
+                    cnt = cnt + 1
+                    ltmat_index(cnt, i) = j
+                    ltmat_val(cnt, i) = val
+                end if
+            end do
+            do while (cnt < 5)
+                cnt = cnt + 1
+                ltmat_index(cnt, i) = 1
+                ltmat_val(cnt, i) = 0d0
             end do
         end do
     end subroutine gen_sparse_lmat
@@ -254,6 +260,6 @@ contains
             end do
         end do
         call dgemm("t", "n", m, m, n, 1d0, lmat, n, &
-                   lmat, n, 0, llmat, m)
+                   lmat, n, 0d0, llmat, m)
     end subroutine calc_ll
 end module init

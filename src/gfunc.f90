@@ -60,13 +60,13 @@ contains
         uret(3) = 100d0*uz
     end subroutine
 
-    subroutine calc_responce(cny_fault, coor_fault, slip_dist, xobs, yobs, leta, xf, &
+    subroutine calc_responce(cny_fault, coor_fault, slip_dist, xobs, yobs, xf, &
                              yf, zf, strike, dip, target_id_val, target_id_size, &
                              node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                              r1vec, r2vec, nvec, uobs, uret)
         implicit none
         double precision, intent(in) :: coor_fault(:, :), slip_dist(:, :)
-        double precision, intent(in) :: leta, xf, yf, zf, strike, dip, xobs, yobs
+        double precision, intent(in) :: xf, yf, zf, strike, dip, xobs, yobs
         double precision, intent(inout) :: xinode(:), etanode(:), uxinode(:), &
             uetanode(:), r1vec(:), r2vec(:), nvec(:), uobs(:), uret(:)
         integer, intent(in) :: cny_fault(:, :), target_id_val(:)
@@ -81,10 +81,10 @@ contains
         dip_rad = dip/180d0*M_PI
         strike_rad = strike/180d0*M_PI
         dip_pass = real(dip)
-        r1vec(1) = -0.5d0
-        r1vec(2) = 0.5d0
-        r2vec(1) = -0.5d0
-        r2vec(2) = 0.5d0
+        r1vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
+        r1vec(2) = 0.5d0 ! 1d0/sqrt(3d0)
+        r2vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
+        r2vec(2) = 0.5d0 ! 1d0/sqrt(3d0)
         ! initialize
         do idim = 1, 3
             uobs(idim) = 0d0
@@ -122,7 +122,6 @@ contains
                     eta = 0d0
                     uxi = 0d0
                     ueta = 0d0
-                    !   for(inode=0 inode < 4 inode + +) {
                     do inode = 1, 4
                         xi = xi + nvec(inode)*xinode(inode)
                         eta = eta + nvec(inode)*etanode(inode)
@@ -141,7 +140,6 @@ contains
                     call call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
                                     dip_pass, area/4., strike, uret)
                     !   add contribution from the point source
-                    !   for(idim=0 idim < 3 idim + +) {
                     do idim = 1, 3
                         uobs(idim) = uobs(idim) + uret(idim)
                     end do
@@ -151,13 +149,13 @@ contains
     end subroutine calc_responce
 
     subroutine calc_responce_dist(obs_points, cny_fault, coor_fault, slip_dist, &
-                                  leta, xf, yf, zf, strike, dip, target_id_val, &
+                                  xf, yf, zf, strike, dip, target_id_val, &
                                   target_id_size, nsar, ngnss, node_id_in_patch, &
                                   xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
                                   nvec, response_dist, uobs, uret)
         implicit none
         double precision, intent(in) :: obs_points(:, :), coor_fault(:, :), slip_dist(:, :)
-        double precision, intent(in) :: leta, xf, yf, zf, strike, dip
+        double precision, intent(in) :: xf, yf, zf, strike, dip
         double precision, intent(inout) :: xinode(:), etanode(:), uxinode(:), &
             uetanode(:), r1vec(:), r2vec(:), nvec(:), response_dist(:, :), uobs(:), uret(:)
         integer, intent(in) :: cny_fault(:, :), target_id_val(:)
@@ -170,7 +168,7 @@ contains
             xobs = obs_points(1, iobs)
             yobs = obs_points(2, iobs)
             ! calculate displacement(ux, uy, uz) at single obsevation point
-            call calc_responce(cny_fault, coor_fault, slip_dist, xobs, yobs, leta, xf, &
+            call calc_responce(cny_fault, coor_fault, slip_dist, xobs, yobs, xf, &
                                yf, zf, strike, dip, target_id_val, target_id_size, &
                                node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                                r1vec, r2vec, nvec, uobs, uret)
@@ -183,7 +181,7 @@ contains
             xobs = obs_points(1, nsar + 1 + 3*(iobs - 1))
             yobs = obs_points(2, nsar + 1 + 3*(iobs - 1))
             ! calculate displacement (ux, uy, uz) at single obsevation point
-            call calc_responce(cny_fault, coor_fault, slip_dist, xobs, yobs, leta, xf, &
+            call calc_responce(cny_fault, coor_fault, slip_dist, xobs, yobs, xf, &
                                yf, zf, strike, dip, target_id_val, target_id_size, &
                                node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                                r1vec, r2vec, nvec, uobs, uret)
@@ -196,14 +194,11 @@ contains
         end do
     end subroutine calc_responce_dist
 
-    subroutine calc_greens_func(gmat, slip_dist, cny_fault, coor_fault, &
-                                obs_points, &
-                                obs_unitvec, leta, xf, yf, zf, strike, dip, &
-                                node_to_elem_val, node_to_elem_size, id_dof, nsar, &
-                                ngnss, nobs, nnode, ndof, target_id_val, &
-                                node_id_in_patch, xinode, etanode, uxinode, &
-                                uetanode, r1vec, r2vec, nvec, response_dist, uobs, &
-                                uret)
+    subroutine calc_greens_func(theta, nplane, nxi, neta, gmat, slip_dist, cny_fault, coor_fault, obs_points, &
+                                obs_unitvec, node_to_elem_val, node_to_elem_size, &
+                                id_dof, nsar, ngnss, nobs, nnode, ndof, target_id_val, &
+                                node_id_in_patch, xinode, etanode, uxinode, uetanode, &
+                                r1vec, r2vec, nvec, response_dist, uobs, uret)
         implicit none
         double precision, intent(inout) :: gmat(:, :), slip_dist(:, :), &
             xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -211,13 +206,14 @@ contains
         integer, intent(inout) :: target_id_val(:), node_id_in_patch(:)
         integer, intent(in) :: cny_fault(:, :), node_to_elem_val(:, :), &
                                node_to_elem_size(:), id_dof(:)
-        double precision, intent(in) :: coor_fault(:, :), obs_points(:, :), &
+        double precision, intent(in) :: theta(:), coor_fault(:, :), obs_points(:, :), &
             obs_unitvec(:, :)
 
-        double precision, intent(in) :: xf, yf, zf, strike, dip, leta
-        integer, intent(in) :: nsar, ngnss, nobs, nnode, ndof
-        integer :: idof, inode, idirection, itarget, iobs, idim, i, j
+        integer, intent(in) ::  nplane, nxi, neta, nsar, ngnss, nobs, nnode, ndof
+        integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j
         integer :: target_id_size
+        double precision :: xf, yf, zf, strike, dip, lxi, leta, strike_rad, dip_rad
+        double precision :: pi = 4d0*atan(1d0)
 
         ! initialize gmat
         do j = 1, 2*ndof
@@ -232,37 +228,76 @@ contains
             end do
         end do
 
-        ! loop for each degree of freedom of slip
-! $omp parallel do private(idof, inode, target_id_size, itarget, target_id_val, &
-! $omp idirection, slip_dist, node_id_in_patch, xinode, etanode, uxinode, uetanode, &
-! $omp r1vec, r2vec, nvec, response_dist, uobs, uret, iobs, idim) reduction(+:gmat)
-        do idof = 1, ndof
-            inode = id_dof(idof)
-            target_id_size = node_to_elem_size(inode)
-            do itarget = 1, target_id_size
-                target_id_val(itarget) = node_to_elem_val(itarget, inode)
-            end do
-            do idirection = 1, 2
-                ! slip distribution with single unit slip
-                call gen_unit_slip(inode, idirection, slip_dist)
-                ! calculate displacement (x, y, z components) at all the
-                ! observation points
-                call calc_responce_dist(obs_points, cny_fault, coor_fault, slip_dist, &
-                                        leta, xf, yf, zf, strike, dip, target_id_val, &
-                                        target_id_size, nsar, ngnss, node_id_in_patch, &
-                                        xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
-                                        nvec, response_dist, uobs, uret)
+        do iplane = 1, nplane
+            ! xf = theta(1)
+            ! yf = theta(2)
+            ! zf = theta(3)
+            ! strike = theta(4)
+            ! strike_rad = strike*pi/180d0
+            ! dip = theta(5)
+            ! dip_rad = dip*pi/180d0
+            ! lxi = theta(6)
+            ! leta = theta(7)
+            ! if (iplane == 2) then
+            !     xf = xf - leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
+            !     yf = yf + leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
+            !     zf = zf + leta/2d0*sin(dip_rad)
 
-                ! inner product (displacement * LOS unitvec)
-                do iobs = 1, nobs
-                    do idim = 1, 3
-                        gmat(iobs, 2*(idof - 1) + idirection) = &
-                            gmat(iobs, 2*(idof - 1) + idirection) + &
-                            response_dist(idim, iobs)*obs_unitvec(idim, iobs)
-                    end do
+            !     xf = xf + theta(9)
+            !     yf = yf + theta(10)
+            !     zf = zf + theta(11)
+
+            !     strike = strike + theta(12)
+            !     strike_rad = strike*pi/180d0
+            !     dip = dip + theta(13)
+            !     dip_rad = dip*pi/180d0
+            !     lxi = theta(14)
+            !     leta = theta(15)
+
+            !     xf = xf + leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
+            !     yf = yf - leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
+            !     zf = zf - leta/2d0*sin(dip_rad)
+            ! end if
+            xf = theta(8*iplane - 7)
+            yf = theta(8*iplane - 6)
+            zf = theta(8*iplane - 5)
+            strike = theta(8*iplane - 4)
+            strike_rad = strike*pi/180d0
+            dip = theta(8*iplane - 3)
+            dip_rad = dip*pi/180d0
+            lxi = theta(8*iplane - 2)
+            leta = theta(8*iplane - 1)
+
+            ! loop for each degree of freedom of slip
+            do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &
+                (nxi - 1)*(neta - 1)*iplane
+                inode = id_dof(idof)
+                target_id_size = node_to_elem_size(inode)
+                do itarget = 1, target_id_size
+                    target_id_val(itarget) = node_to_elem_val(itarget, inode)
                 end do
-                ! slip distribution with single unit slip
-                call del_unit_slip(inode, idirection, slip_dist)
+                do idirection = 1, 2
+                    ! slip distribution with single unit slip
+                    call gen_unit_slip(inode, idirection, slip_dist)
+                    ! calculate displacement (x, y, z components) at all the
+                    ! observation points
+                    call calc_responce_dist(obs_points, cny_fault, coor_fault, slip_dist, &
+                                            xf, yf, zf, strike, dip, target_id_val, &
+                                            target_id_size, nsar, ngnss, node_id_in_patch, &
+                                            xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
+                                            nvec, response_dist, uobs, uret)
+
+                    ! inner product (displacement * LOS unitvec)
+                    do iobs = 1, nobs
+                        do idim = 1, 3
+                            gmat(iobs, 2*(idof - 1) + idirection) = &
+                                gmat(iobs, 2*(idof - 1) + idirection) + &
+                                response_dist(idim, iobs)*obs_unitvec(idim, iobs)
+                        end do
+                    end do
+                    ! slip distribution with single unit slip
+                    call del_unit_slip(inode, idirection, slip_dist)
+                end do
             end do
         end do
     end subroutine
