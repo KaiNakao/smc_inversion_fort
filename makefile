@@ -9,6 +9,7 @@ COMPILER_F90 = mpiifort -fc=ifx
 COMPILER_CPP = mpiicpc -cxx=icpx 
 FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -module ./mod
 FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi 
+
 # for debug 
 # FLAGS_F90   = -g -fopenmp -check all -traceback -qmkl -lmpi -fpe0 -fp-model=precise -module ./mod
 # FLAGS_CPP   = -g -fopenmp -qmkl -lmpi -fp-model=precise
