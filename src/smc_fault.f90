@@ -117,22 +117,22 @@ contains
             end do
         end do
 
-        open(10, file="tmp/alpha2_full", status="replace")
-        write(10, *), alpha2_full
-        close(10)
-        open(10, file="tmp/dvec", status="replace")
-        write(10, *), dvec
-        close(10)
-        open(10, file="tmp/gmat", status="replace")
-        write(10, *), gmat
-        close(10)
-        open(10, file="tmp/lmat", status="replace")
-        write(10, *), lmat
-        close(10)
-        open(10, file="tmp/sigma2_full", status="replace")
-        write(10, *), sigma2_full
-        close(10)
-        print *, shape(gmat), shape(lmat), shape(sigma2_full), shape(alpha2_full), shape(dvec)
+        ! open(10, file="tmp/alpha2_full", status="replace")
+        ! write(10, *), alpha2_full
+        ! close(10)
+        ! open(10, file="tmp/dvec", status="replace")
+        ! write(10, *), dvec
+        ! close(10)
+        ! open(10, file="tmp/gmat", status="replace")
+        ! write(10, *), gmat
+        ! close(10)
+        ! open(10, file="tmp/lmat", status="replace")
+        ! write(10, *), lmat
+        ! close(10)
+        ! open(10, file="tmp/sigma2_full", status="replace")
+        ! write(10, *), sigma2_full
+        ! close(10)
+        ! print *, shape(gmat), shape(lmat), shape(sigma2_full), shape(alpha2_full), shape(dvec)
 
         st_time = omp_get_wtime()
         ! Sequential Monte Carlo sampling for slip

@@ -84,7 +84,6 @@ contains
         double precision :: tmp, log_alpha2
 
         n = 2*nnode
-
         do i = 1, n
             lsvec(i) = 0d0
         end do
@@ -105,6 +104,7 @@ contains
         do i = 1, n
             slip_calc_prior = slip_calc_prior + lsvec(i)**2d0/(2d0*alpha2_full(i))
         end do
+
     end function slip_calc_prior
 
     subroutine slip_calc_grad(grad, svec, gmat, lmat_index, lmat_val, &
@@ -342,7 +342,7 @@ contains
 !$omp end parallel do
         evidence = evidence/nparticle
         neglog_evidence = -log(evidence) + diff_gamma*min_likelihood
-
+        
         slip_find_next_gamma = gamma
     end function slip_find_next_gamma
 
@@ -667,7 +667,7 @@ contains
             end do
         end do
 !$omp end parallel do
-        ! print *, "acc_rate: ", acc_rate
+        print *, "acc_rate: ", acc_rate
         !   update configurations
 !$omp parallel do private(iparticle, idim)
         do iparticle = 1, nparticle
@@ -742,22 +742,27 @@ contains
                                 gsvec, lsvec, sigma2_full, alpha2_full, &
                                 nobs, ndof, nnode, ndim, gsdvec, gsgmat)
             
-            print *, "check gradient"
-            do idim = 1, ndim
-                particle_cand(idim) = particle_cand(idim) - 1d-8
-                dtmp1 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
-                                                  log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
-                dtmp1 = dtmp1 + slip_calc_prior(particle_cand, alpha2_full, &
-                                                theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
-                particle_cand(idim) = particle_cand(idim) + 2d-8
-                dtmp2 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
-                                                  log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
-                dtmp2 = dtmp2 + slip_calc_prior(particle_cand, alpha2_full, &
-                                                theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
-                particle_cand(idim) = particle_cand(idim) - 1d-8
-                print *, (dtmp2 - dtmp1)/2d-8, grad(idim)
-            end do
-            stop
+            ! print *, "check gradient"
+            ! open(10, file="tmp/svec", status="replace")
+            ! write(10, *), particle_cand
+            ! close(10)
+            ! print *, "svec: ", particle_cand
+            ! print *, "-----------------"
+            ! do idim = 1, ndim
+            !     particle_cand(idim) = particle_cand(idim) - 1d-8
+            !     dtmp1 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
+            !                                       log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
+            !     dtmp1 = dtmp1 + slip_calc_prior(particle_cand, alpha2_full, &
+            !                                     theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
+            !     particle_cand(idim) = particle_cand(idim) + 2d-8
+            !     dtmp2 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
+            !                                       log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, gsvec, nobs, ndof)
+            !     dtmp2 = dtmp2 + slip_calc_prior(particle_cand, alpha2_full, &
+            !                                     theta, nplane, nxi, neta, lmat_index, lmat_val, lsvec, nnode)
+            !     particle_cand(idim) = particle_cand(idim) - 1d-8
+            !     print *, (dtmp2 - dtmp1)/2d-8, grad(idim)
+            ! end do
+            ! stop
             call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
                                 ltmat_index, ltmat_val, dvec, gamma, &
                                 gsvec, lsvec, sigma2_full, alpha2_full, &
@@ -1136,7 +1141,7 @@ contains
         ! ntau_lower = max(ntau_mean - 20, 1)
         ! print *, "ntau range: ", ntau_lower, ntau_upper
         ! print *, "ntau mean: ", ntau_mean
-        ! print *, "dtau range: ", exp(log_dtau_lower), exp(log_dtau_upper)
+        print *, "dtau range: ", exp(log_dtau_lower), exp(log_dtau_upper)
 
     end subroutine slip_hmc_tuning
 
@@ -1206,14 +1211,14 @@ contains
                 call dtrmv('l', 'n', 'n', ndim, cov, ndim, st_rand, 1)
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
-                    !   non negative constraints
-                    if (particle_cand(idim) < 0d0) then
-                        particle_cand(idim) = -particle_cand(idim)
-                    end if
-                    !   max slip constraints
-                    if (particle_cand(idim) > max_slip) then
-                        particle_cand(idim) = 2*max_slip - particle_cand(idim)
-                    end if
+                    ! !   non negative constraints
+                    ! if (particle_cand(idim) < 0d0) then
+                    !     particle_cand(idim) = -particle_cand(idim)
+                    ! end if
+                    ! !   max slip constraints
+                    ! if (particle_cand(idim) > max_slip) then
+                    !     particle_cand(idim) = 2*max_slip - particle_cand(idim)
+                    ! end if
                 end do
 
                 ! calculate negative log likelihood/prior/posterior
@@ -1495,7 +1500,9 @@ contains
                         write (17, "(f12.5)", advance="no") slip(idirection, inode)
                     end do
                 end do
-                write (17, "(f12.5)") likelihood_ls(iparticle) + prior_ls(iparticle)
+                ! write (17, "(f12.5)") likelihood_ls(iparticle) + prior_ls(iparticle)
+                write (17, "(f12.5)", advance="no") likelihood_ls(iparticle) 
+                write (17, "(f12.5)") prior_ls(iparticle)
             end do
             close (17)
             deallocate (slip)
