@@ -62,7 +62,6 @@ contains
         call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
                    nobs, svec, 1, 0d0, gsvec, 1)
 
-        print *, "gsvec: ", gsvec
         ! slip_calc_likelihood = nsar*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
         slip_calc_likelihood = 0d0
         do i = 1, nobs
@@ -235,7 +234,7 @@ contains
         end do
         en_time = omp_get_wtime()
 
-! $omp parallel do private(iparticle, idim, particle_cur, gsvec, lsvec)
+!$omp parallel do private(iparticle, idim, particle_cur, gsvec, lsvec)
         do iparticle = 1, nparticle
             do idim = 1, ndim
                 particle_cur(idim) = particles(idim, iparticle)
@@ -248,8 +247,7 @@ contains
             prior_ls(iparticle) = slip_calc_prior(particle_cur, alpha2_full, theta, nplane, nxi, neta, &
                                                   lmat_index, lmat_val, lsvec, nnode)
         end do
-! $omp end parallel do
-        stop
+!$omp end parallel do
     end subroutine
 
     subroutine slip_calc_mean_std_vector(vec, size, mean, std)
@@ -261,18 +259,18 @@ contains
         integer :: i
 
         mean = 0d0
-! $omp parallel do private(i) reduction(+:mean)
+!$omp parallel do private(i) reduction(+:mean)
         do i = 1, size
             mean = mean + vec(i)
         end do
-! $omp end parallel do
+!$omp end parallel do
         mean = mean/size
         std = 0d0
-! $omp parallel do private(i) reduction(+:std)
+!$omp parallel do private(i) reduction(+:std)
         do i = 1, size
             std = std + (vec(i) - mean)**2d0
         end do
-! $omp end parallel do
+!$omp end parallel do
         std = std/size
         std = sqrt(std)
     end subroutine slip_calc_mean_std_vector
@@ -290,11 +288,11 @@ contains
 
         ! find minimum of negative log likelihood
         min_likelihood = likelihood_ls(1)
-! $omp parallel do private(iparticle) reduction(min : min_likelihood)
+!$omp parallel do private(iparticle) reduction(min : min_likelihood)
         do iparticle = 1, nparticle
             min_likelihood = min(min_likelihood, likelihood_ls(iparticle))
         end do
-! $omp end parallel do
+!$omp end parallel do
 
         print *, "likelihood_ls", likelihood_ls
         cv_threshold = 1d0
@@ -307,14 +305,14 @@ contains
         do while (err > 1d-10)
             gamma = (lower + upper)/2d0
             diff_gamma = gamma - gamma_prev
-! $omp parallel do private(iparticle, likelihood)
+!$omp parallel do private(iparticle, likelihood)
             do iparticle = 1, nparticle
                 likelihood = likelihood_ls(iparticle)
                 ! extract min_likelihood to avoid underflow of the weight
                 weights(iparticle) = &
                     exp(-diff_gamma*(likelihood - min_likelihood))
             end do
-! $omp end parallel do
+!$omp end parallel do
 
             ! calculate c.o.v = mean/std
             call slip_calc_mean_std_vector(weights, nparticle, mean, std)
@@ -333,12 +331,12 @@ contains
         ! Calulate S_j(mean of the weight)
         evidence = 0d0
         diff_gamma = gamma - gamma_prev
-! $omp parallel do private(iparticle, likelihood) reduction(+ : evidence)
+!$omp parallel do private(iparticle, likelihood) reduction(+ : evidence)
         do iparticle = 1, nparticle
             likelihood = likelihood_ls(iparticle)
             evidence = evidence + exp(-diff_gamma*(likelihood - min_likelihood))
         end do
-! $omp end parallel do
+!$omp end parallel do
         evidence = evidence/nparticle
         neglog_evidence = -log(evidence) + diff_gamma*min_likelihood
         
@@ -360,11 +358,11 @@ contains
         ess_threshold = nparticle/2d0
         ! find minimum of negative log likelihood
         min_likelihood = likelihood_ls(1)
-! $omp parallel do private(iparticle) reduction(min : min_likelihood)
+!$omp parallel do private(iparticle) reduction(min : min_likelihood)
         do iparticle = 1, nparticle
             min_likelihood = min(min_likelihood, likelihood_ls(iparticle))
         end do
-! $omp end parallel do
+!$omp end parallel do
 
         cv_threshold = 1d0
         ! binary search for the next gamma
@@ -376,19 +374,19 @@ contains
         do while (err > 10d-8)
             gamma = (lower + upper)/2d0
             diff_gamma = gamma - gamma_prev
-! $omp parallel do private(iparticle, likelihood)
+!$omp parallel do private(iparticle, likelihood)
             do iparticle = 1, nparticle
                 likelihood = likelihood_ls(iparticle)
                 ! extract min_likelihood to avoid underflow of the weight
                 weights(iparticle) = &
                     exp(-diff_gamma*(likelihood - min_likelihood))
             end do
-! $omp end parallel do
+!$omp end parallel do
 
             ! calculate effective sample size
             wsum = 0d0; 
             w2sum = 0d0; 
-! $omp parallel do private(iparticle) reduction(+:wsum, w2sum)
+!$omp parallel do private(iparticle) reduction(+:wsum, w2sum)
             do iparticle = 1, nparticle
                 wsum = wsum + weights(iparticle)
                 w2sum = w2sum + weights(iparticle)**2
@@ -409,12 +407,12 @@ contains
         ! Calulate S_j(mean of the weight)
         evidence = 0d0
         diff_gamma = gamma - gamma_prev
-! $omp parallel do private(iparticle, likelihood) reduction(+ : evidence)
+!$omp parallel do private(iparticle, likelihood) reduction(+ : evidence)
         do iparticle = 1, nparticle
             likelihood = likelihood_ls(iparticle)
             evidence = evidence + exp(-diff_gamma*(likelihood - min_likelihood))
         end do
-! $omp end parallel do
+!$omp end parallel do
         evidence = evidence/nparticle
         neglog_evidence = -log(evidence) + diff_gamma*min_likelihood
         slip_find_next_gamma_ess = gamma
@@ -427,17 +425,17 @@ contains
         double precision :: sum
         integer :: iparticle
 
-        sum = 0
-! $omp parallel do private(iparticle) reduction(+ : sum)
+        sum = 0d0
+!$omp parallel do private(iparticle) reduction(+ : sum)
         do iparticle = 1, nparticle
             sum = sum + weights(iparticle)
         end do
-! $omp end parallel do
-! $omp parallel do private(iparticle)
+!$omp end parallel do
+!$omp parallel do private(iparticle)
         do iparticle = 1, nparticle
             weights(iparticle) = weights(iparticle)/sum
         end do
-! $omp end parallel do
+!$omp end parallel do
     end subroutine
 
     subroutine slip_calc_mean_particles(particles, weights, &
@@ -451,14 +449,14 @@ contains
         do idim = 1, ndim
             mean(idim) = 0d0
         end do
-! $omp parallel do private(iparticle, weight, idim) reduction(+:mean)
+!$omp parallel do private(iparticle, weight, idim) reduction(+:mean)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
             do idim = 1, ndim
                 mean(idim) = mean(idim) + weight*particles(idim, iparticle)
             end do
         end do
-! $omp end parallel do
+!$omp end parallel do
     end subroutine slip_calc_mean_particles
 
     subroutine slip_calc_cov_particles(particles, weights, mean, &
@@ -475,8 +473,8 @@ contains
             end do
         end do
 
-! $omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
-! $omp reduction(+:cov)
+!$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
+!$omp reduction(+:cov)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
             do jdim = 1, ndim
@@ -487,7 +485,7 @@ contains
                 end do
             end do
         end do
-! $omp end parallel do
+!$omp end parallel do
         do idim = 1, ndim
             cov_diag(idim) = cov(idim, idim)
         end do
@@ -507,8 +505,8 @@ contains
         end do
 
 !         cov_diag = 0d0
-! ! $omp parallel do private(iparticle, weight, idim, di) &
-! ! $omp reduction(+:cov_diag)
+! !$omp parallel do private(iparticle, weight, idim, di) &
+! !$omp reduction(+:cov_diag)
 !         do iparticle = 1, nparticle
 !             weight = weights(iparticle)
 !             do idim = 1, ndim
@@ -516,7 +514,7 @@ contains
 !                 cov_diag(idim) = cov_diag(idim) + weight*di*di
 !             end do
 !         end do
-! ! $omp end parallel do
+! !$omp end parallel do
         return
     end subroutine slip_calc_cov_particles
 
@@ -597,11 +595,11 @@ contains
         end do
 
         acc_rate = 0d0
-! $omp parallel do private(&
-! $omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
-! $omp prior_cur, post_cur, jparticle, particle_cand, st_rand, pvec, &
-! $omp ham_cur, itau, grad, gsvec, lsvec, likelihood_cand, prior_cand, &
-! $omp post_cand, ham_cand, metropolis, dtau, ntau) reduction(+:acc_rate)
+!$omp parallel do private(&
+!$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
+!$omp prior_cur, post_cur, jparticle, particle_cand, st_rand, pvec, &
+!$omp ham_cur, itau, grad, gsvec, lsvec, likelihood_cand, prior_cand, &
+!$omp post_cand, ham_cand, metropolis, dtau, ntau) reduction(+:acc_rate)
         ! hamiltonian monte carlo
         do iparticle = 1, nparticle
             istart = id_start(iparticle)
@@ -666,10 +664,10 @@ contains
                 prior_ls_new(jparticle) = prior_cur
             end do
         end do
-! $omp end parallel do
+!$omp end parallel do
         ! print *, "acc_rate: ", acc_rate
         !   update configurations
-! $omp parallel do private(iparticle, idim)
+!$omp parallel do private(iparticle, idim)
         do iparticle = 1, nparticle
             do idim = 1, ndim
                 particles(idim, iparticle) = particles_new(idim, iparticle)
@@ -677,7 +675,7 @@ contains
             likelihood_ls(iparticle) = likelihood_ls_new(iparticle)
             prior_ls(iparticle) = prior_ls_new(iparticle)
         end do
-! $omp end parallel do
+!$omp end parallel do
     end subroutine slip_hmc_sampling
 
     subroutine slip_leapfrog(ham_cur, post_cur, ndim, pvec, cov_diag, &
@@ -945,11 +943,11 @@ contains
         en_time = omp_get_wtime()
 
         score_ls = -1d0
-! $omp parallel do private(&
-! $omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
-! $omp prior_cur, post_cur, jparticle, particle_cand, st_rand, pvec, &
-! $omp ham_cur, itau, grad, gsvec, lsvec, likelihood_cand, prior_cand, &
-! $omp post_cand, ham_cand, metropolis, dtau, ntau, dham, score) reduction(+:acc_rate)
+!$omp parallel do private(&
+!$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
+!$omp prior_cur, post_cur, jparticle, particle_cand, st_rand, pvec, &
+!$omp ham_cur, itau, grad, gsvec, lsvec, likelihood_cand, prior_cand, &
+!$omp post_cand, ham_cand, metropolis, dtau, ntau, dham, score) reduction(+:acc_rate)
         ! hamiltonian monte carlo
         do iparticle = 1, nparticle, tuning_factor
             istart = id_start(iparticle)
@@ -1028,7 +1026,7 @@ contains
         end do
 
         sum_score = 0d0
-! $omp parallel do private(iparticle, istart, nassigned, jparticle) reduction(+:sum_score)
+!$omp parallel do private(iparticle, istart, nassigned, jparticle) reduction(+:sum_score)
         do iparticle = 1, nparticle, tuning_factor
             istart = id_start(iparticle)
             nassigned = assigned_num(iparticle)
@@ -1036,12 +1034,12 @@ contains
                 sum_score = sum_score + score_ls(jparticle)
             end do
         end do
-! $omp end parallel do
+!$omp end parallel do
 
         ! if degenerated
         if (sum_score < 1d-5) then
             sum_score = 0d0
-! $omp parallel do private(iparticle, istart, nassigned, jparticle) reduction(+:sum_score)
+!$omp parallel do private(iparticle, istart, nassigned, jparticle) reduction(+:sum_score)
             do iparticle = 1, nparticle, tuning_factor
                 istart = id_start(iparticle)
                 nassigned = assigned_num(iparticle)
@@ -1050,10 +1048,10 @@ contains
                     sum_score = sum_score + 1d0
                 end do
             end do
-! $omp end parallel do
+!$omp end parallel do
         end if
         weights_hmc = -1d0
-! $omp parallel do private(iparticle, istart, nassigned, jparticle)
+!$omp parallel do private(iparticle, istart, nassigned, jparticle)
         do iparticle = 1, nparticle, tuning_factor
             istart = id_start(iparticle)
             nassigned = assigned_num(iparticle)
@@ -1061,7 +1059,7 @@ contains
                 weights_hmc(jparticle) = score_ls(jparticle)/sum_score
             end do
         end do
-! $omp end parallel do
+!$omp end parallel do
 
         ! residual systematic resampling
         call random_number_correction(u)
@@ -1118,21 +1116,21 @@ contains
             end do
         end do
 
-! $omp parallel do private(iparticle)
+!$omp parallel do private(iparticle)
         do iparticle = 1, nparticle
             dtau_ls(iparticle) = dtau_ls_new(iparticle)
             ntau_ls(iparticle) = ntau_ls_new(iparticle)
         end do
-! $omp end parallel do
+!$omp end parallel do
 
         dtau_mean = 0d0
         ntau_mean = 0
-! $omp parallel do private(iparticle) reduction(+:dtau_mean, ntau_mean)
+!$omp parallel do private(iparticle) reduction(+:dtau_mean, ntau_mean)
         do iparticle = 1, nparticle
             dtau_mean = dtau_mean + dtau_ls(iparticle)
             ntau_mean = ntau_mean + ntau_ls(iparticle)
         end do
-! $omp end parallel do
+!$omp end parallel do
         dtau_mean = dtau_mean/d_nparticle
         ntau_mean = ntau_mean/nparticle
         log_dtau_upper = log(dtau_mean) + log(5d0)
@@ -1187,10 +1185,10 @@ contains
         end do
 
         !  MCMC sampling from the updated distribution
-! $omp parallel do private( &
-! $omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
-! $omp prior_cur, post_cur, jparticle, st_rand, particle_cand, &
-! $omp likelihood_cand, prior_cand, post_cand, metropolis, gsvec, lsvec)
+!$omp parallel do private( &
+!$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
+!$omp prior_cur, post_cur, jparticle, st_rand, particle_cand, &
+!$omp likelihood_cand, prior_cand, post_cand, metropolis, gsvec, lsvec)
         do iparticle = 1, nparticle
             istart = id_start(iparticle)
             nassigned = assigned_num(iparticle)
@@ -1252,10 +1250,10 @@ contains
                 prior_ls_new(jparticle) = prior_cur
             end do
         end do
-! $omp end parallel do
+!$omp end parallel do
 
         !   update configurations
-! $omp parallel do private(iparticle, idim)
+!$omp parallel do private(iparticle, idim)
         do iparticle = 1, nparticle
             do idim = 1, ndim
                 particles(idim, iparticle) = particles_new(idim, iparticle)
@@ -1263,7 +1261,7 @@ contains
             likelihood_ls(iparticle) = likelihood_ls_new(iparticle)
             prior_ls(iparticle) = prior_ls_new(iparticle)
         end do
-! $omp end parallel do
+!$omp end parallel do
     end subroutine
 
     subroutine slip_calc_gsd_gsg(gmat, sigma2_full, dvec, gsdvec, gsgmat, &
@@ -1460,7 +1458,6 @@ contains
             !                         lmat_index, lmat_val, nnode, max_slip, &
             !                         st_rand_ls, metropolis_ls, particle_cur, &
             !                         particle_cand, st_rand, gsvec, lsvec)
-            print * , "particles: ", particles
             en_time1 = omp_get_wtime()
             ! print *, "loop total: ", en_time1 - st_time1
             ! print *, "hmc: ", en_time1 - st_time2
