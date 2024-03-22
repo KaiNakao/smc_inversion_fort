@@ -65,7 +65,7 @@ contains
         ! slip_calc_likelihood = nsar*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
         slip_calc_likelihood = 0d0
         do i = 1, nobs
-            slip_calc_likelihood = slip_calc_likelihood + &
+            slip_calc_likelihood = slip_calc_likelihood + & 
                                     log(sigma2_full(i)) / 2d0
             slip_calc_likelihood = slip_calc_likelihood + &
                                    (dvec(i) - gsvec(i))**2d0/(2d0*sigma2_full(i))
@@ -83,7 +83,6 @@ contains
         double precision :: tmp, log_alpha2
 
         n = 2*nnode
-
         do i = 1, n
             lsvec(i) = 0d0
         end do
@@ -96,14 +95,15 @@ contains
         end do
 
         slip_calc_prior = 0d0
-        do i = 1, nplane
-            log_alpha2 = theta(8*i)
-            slip_calc_prior = slip_calc_prior + &
-                              2d0*(nxi + 1)*(neta + 1)*log_alpha2/2d0
-        end do
+        ! do i = 1, nplane
+        !     log_alpha2 = theta(8*i)
+        !     slip_calc_prior = slip_calc_prior + &
+        !                       2d0*(nxi + 1)*(neta + 1)*log_alpha2/2d0
+        ! end do
         do i = 1, n
             slip_calc_prior = slip_calc_prior + lsvec(i)**2d0/(2d0*alpha2_full(i))
         end do
+
     end function slip_calc_prior
 
     subroutine slip_calc_grad(grad, svec, gmat, lmat_index, lmat_val, &
@@ -295,14 +295,13 @@ contains
 !$omp end parallel do
 
         cv_threshold = 2d0
-        ! cv_threshold = 5d-1
         ! binary search for the next gamma
         ! such that c.o.v of the weight is equivalent to cv_threashold
         lower = gamma_prev
         upper = 1d0
         err = 1d0
         gamma = 1d0
-        do while (err > 10d-8)
+        do while (err > 1d-10)
             gamma = (lower + upper)/2d0
             diff_gamma = gamma - gamma_prev
 !$omp parallel do private(iparticle, likelihood)
@@ -323,7 +322,7 @@ contains
                 lower = gamma
             end if
             err = abs(cv - cv_threshold)
-            if (abs(gamma - 1) < 1d-8) then
+            if (abs(gamma - 1d0) < 1d-10) then
                 exit
             end if
         end do
@@ -339,7 +338,7 @@ contains
 !$omp end parallel do
         evidence = evidence/nparticle
         neglog_evidence = -log(evidence) + diff_gamma*min_likelihood
-
+        
         slip_find_next_gamma = gamma
     end function slip_find_next_gamma
 
@@ -425,7 +424,7 @@ contains
         double precision :: sum
         integer :: iparticle
 
-        sum = 0
+        sum = 0d0
 !$omp parallel do private(iparticle) reduction(+ : sum)
         do iparticle = 1, nparticle
             sum = sum + weights(iparticle)
@@ -734,10 +733,17 @@ contains
             ! end if
         end do
         do itau = 1, ntau
-            ! call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-            !                     ltmat_index, ltmat_val, dvec, 5d-1, &
-            !                     gsvec, lsvec, sigma2_full, alpha2_full, &
-            !                     nobs, ndof, nnode, ndim, gsdvec, gsgmat)
+            call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
+                                ltmat_index, ltmat_val, dvec, 5d-1, &
+                                gsvec, lsvec, sigma2_full, alpha2_full, &
+                                nobs, ndof, nnode, ndim, gsdvec, gsgmat)
+            
+            ! print *, "check gradient"
+            ! open(10, file="tmp/svec", status="replace")
+            ! write(10, *), particle_cand
+            ! close(10)
+            ! print *, "svec: ", particle_cand
+            ! print *, "-----------------"
             ! do idim = 1, ndim
             !     particle_cand(idim) = particle_cand(idim) - 1d-8
             !     dtmp1 = 5d-1*slip_calc_likelihood(particle_cand, dvec, sigma2_full, gmat, &
@@ -774,7 +780,7 @@ contains
                     ham_cand = 1d20
                     return
                 end if
-                ! reflection
+                ! ! reflection
                 do while (particle_cand(idim) < 0d0 .or. &
                           particle_cand(idim) > max_slip)
                     if (particle_cand(idim) > max_slip) then
@@ -1201,14 +1207,14 @@ contains
                 call dtrmv('l', 'n', 'n', ndim, cov, ndim, st_rand, 1)
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
-                    !   non negative constraints
-                    if (particle_cand(idim) < 0d0) then
-                        particle_cand(idim) = -particle_cand(idim)
-                    end if
-                    !   max slip constraints
-                    if (particle_cand(idim) > max_slip) then
-                        particle_cand(idim) = 2*max_slip - particle_cand(idim)
-                    end if
+                    ! !   non negative constraints
+                    ! if (particle_cand(idim) < 0d0) then
+                    !     particle_cand(idim) = -particle_cand(idim)
+                    ! end if
+                    ! !   max slip constraints
+                    ! if (particle_cand(idim) > max_slip) then
+                    !     particle_cand(idim) = 2*max_slip - particle_cand(idim)
+                    ! end if
                 end do
 
                 ! calculate negative log likelihood/prior/posterior
@@ -1222,7 +1228,7 @@ contains
 
                 !  metropolis test
                 metropolis = metropolis_ls(jparticle)
-                if (exp(post_cur - post_cand) > metropolis) then
+                if (post_cur - post_cand > log(metropolis)) then
                     ! accept
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
@@ -1375,6 +1381,7 @@ contains
         neglog_ret = 0d0
 
         do while (1d0 - gamma > 10d-8)
+            print *, "iter: ", iter
             ! do iiter = 1, 10
             st_time1 = omp_get_wtime()
             ! S_j
@@ -1382,6 +1389,7 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
+            print *, "gamma: ", gamma
             neglog_ret = neglog_ret + neglog_evidence
             if (iter > 200) then
                 neglog_ret = 1d10
@@ -1459,7 +1467,9 @@ contains
             !     do idim = 1, ndim
             !         write (17, "(f12.5)", advance="no") particles(idim, iparticle)
             !     end do
-            !     write (17, "(f12.5)") likelihood_ls(iparticle)
+            !     write (17, "(f12.5)", advance="no") likelihood_ls(iparticle)
+            !     write (17, "(f12.5)", advance="no") prior_ls(iparticle)
+            !     write (17, *)
             ! end do
             ! close (17)
             iter = iter + 1
@@ -1489,7 +1499,9 @@ contains
                         write (17, "(f12.5)", advance="no") slip(idirection, inode)
                     end do
                 end do
-                write (17, "(f12.5)") likelihood_ls(iparticle) + prior_ls(iparticle)
+                ! write (17, "(f12.5)") likelihood_ls(iparticle) + prior_ls(iparticle)
+                write (17, "(f12.5)", advance="no") likelihood_ls(iparticle) 
+                write (17, "(f12.5)") prior_ls(iparticle)
             end do
             close (17)
             deallocate (slip)
