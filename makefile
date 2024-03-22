@@ -7,8 +7,8 @@
 # ibis
 COMPILER_F90 = mpiifort -fc=ifx
 COMPILER_CPP = mpiicpc -cxx=icpx 
-FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -module ./mod
-FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi 
+FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fpe0 -fp-model=precise -module ./mod
+FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
 
 # for debug 
 # FLAGS_F90   = -g -fopenmp -check all -traceback -qmkl -lmpi -fpe0 -fp-model=precise -module ./mod
@@ -45,7 +45,7 @@ obj/smc_fault.o: src/smc_fault.f90 obj/init.o obj/gfunc.o obj/smc_slip.o obj/sor
 obj/main.o: src/main.f90 obj/init.o obj/gfunc.o obj/smc_fault.o
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 
-obj/DC3Dfortran.o: src/DC3Dfortran.f
+obj/DC3Dfortran.o: src/DC3Dfortran.f90
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 
 all: clean $(TARGET)

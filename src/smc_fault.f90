@@ -121,23 +121,6 @@ contains
             offset = offset + (nxi + 1) * (neta + 1)
         end do
 
-        ! open(10, file="tmp/alpha2_full", status="replace")
-        ! write(10, *), alpha2_full
-        ! close(10)
-        ! open(10, file="tmp/dvec", status="replace")
-        ! write(10, *), dvec
-        ! close(10)
-        ! open(10, file="tmp/gmat", status="replace")
-        ! write(10, *), gmat
-        ! close(10)
-        ! open(10, file="tmp/lmat", status="replace")
-        ! write(10, *), lmat
-        ! close(10)
-        ! open(10, file="tmp/sigma2_full", status="replace")
-        ! write(10, *), sigma2_full
-        ! close(10)
-        ! print *, shape(gmat), shape(lmat), shape(sigma2_full), shape(alpha2_full), shape(dvec)
-
         st_time = omp_get_wtime()
         ! Sequential Monte Carlo sampling for slip
         ! calculate negative log of likelihood
@@ -694,7 +677,7 @@ contains
         iter = iter + 1
         gamma = 0d0
         fault_evidence = 0d0
-        do while (1.-gamma > 10d0**(-8d0))
+        do while (1d0 - gamma > 10d0**(-8d0))
             if (myid == 0) then
                 ! find the gamma such that c.o.v of weights = 0.5
                 gamma_prev = gamma

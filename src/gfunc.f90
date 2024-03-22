@@ -23,28 +23,65 @@ contains
         slip_dist(idirection, inode) = 0d0
     end subroutine del_unit_slip
 
+    ! subroutine call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
+    !                       dip, area, strike, uret)
+    !     implicit none
+    !     double precision, intent(in) :: xsource, ysource, zsource, xobs, yobs, &
+    !         uxi, ueta, area, strike
+    !     double precision, intent(inout) :: uret(:)
+    !     real, intent(inout) :: dip
+    !     double precision :: M_PI, strike_rad, ux_rot, uy_rot
+    !     real :: x, y, alpha, z, depth, pot1, pot2, pot3, pot4, &
+    !             ux, uy, uz, uxx, uyx, uzx, uxy, uyy, uzy, uxz, uyz, uzz
+    !     integer :: iret
+    !     M_PI = 2d0*asin(1d0)
+    !     strike_rad = strike/180d0*M_PI
+    !     ! in DC3D, x axis is the strike direction
+    !     ! rotation
+    !     x = real(sin(strike_rad)*(xobs - xsource) + cos(strike_rad)*(yobs - ysource))
+    !     y = real(-cos(strike_rad)*(xobs - xsource) + sin(strike_rad)*(yobs - ysource))
+    !     alpha = real(2d0/3d0)
+    !     z = 0d0
+    !     depth = -real(zsource)
+    !     pot1 = real(uxi*area)
+    !     pot2 = real(ueta*area)
+    !     pot3 = 0d0
+    !     pot4 = 0d0
+    !     call dc3d0(alpha, x, y, z, depth, dip, pot1, pot2, pot3, pot4, ux, &
+    !                uy, uz, uxx, uyx, uzx, uxy, uyy, uzy, uxz, uyz, uzz, &
+    !                iret)
+    !     ! inverse rotation
+    !     ux_rot = sin(strike_rad)*ux - cos(strike_rad)*uy
+    !     uy_rot = cos(strike_rad)*ux + sin(strike_rad)*uy
+    !     ! adjust the unit of variables
+    !     ! uret = {pow(10, 2) * ux_rot, pow(10, 2) * uy_rot, pow(10, 2) * uz}
+    !     uret(1) = 100d0*ux_rot
+    !     uret(2) = 100d0*uy_rot
+    !     uret(3) = 100d0*uz
+    ! end subroutine
+
     subroutine call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
                           dip, area, strike, uret)
         implicit none
         double precision, intent(in) :: xsource, ysource, zsource, xobs, yobs, &
             uxi, ueta, area, strike
         double precision, intent(inout) :: uret(:)
-        real, intent(inout) :: dip
+        double precision, intent(in) :: dip
         double precision :: M_PI, strike_rad, ux_rot, uy_rot
-        real :: x, y, alpha, z, depth, pot1, pot2, pot3, pot4, &
+        double precision :: x, y, alpha, z, depth, pot1, pot2, pot3, pot4, &
                 ux, uy, uz, uxx, uyx, uzx, uxy, uyy, uzy, uxz, uyz, uzz
         integer :: iret
         M_PI = 2d0*asin(1d0)
         strike_rad = strike/180d0*M_PI
         ! in DC3D, x axis is the strike direction
         ! rotation
-        x = real(sin(strike_rad)*(xobs - xsource) + cos(strike_rad)*(yobs - ysource))
-        y = real(-cos(strike_rad)*(xobs - xsource) + sin(strike_rad)*(yobs - ysource))
-        alpha = real(2d0/3d0)
+        x = sin(strike_rad)*(xobs - xsource) + cos(strike_rad)*(yobs - ysource)
+        y = -cos(strike_rad)*(xobs - xsource) + sin(strike_rad)*(yobs - ysource)
+        alpha = (2d0/3d0)
         z = 0d0
-        depth = -real(zsource)
-        pot1 = real(uxi*area)
-        pot2 = real(ueta*area)
+        depth = -(zsource)
+        pot1 = (uxi*area)
+        pot2 = (ueta*area)
         pot3 = 0d0
         pot4 = 0d0
         call dc3d0(alpha, x, y, z, depth, dip, pot1, pot2, pot3, pot4, ux, &
@@ -76,11 +113,9 @@ contains
         integer ::  ir1, ir2
         double precision ::  r1, r2, dip_rad, strike_rad, area, xi, eta, uxi, ueta, &
             xsource, ysource, zsource, M_PI
-        real :: dip_pass
         M_PI = 2d0*asin(1d0)
         dip_rad = dip/180d0*M_PI
         strike_rad = strike/180d0*M_PI
-        dip_pass = real(dip)
         r1vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
         r1vec(2) = 0.5d0 ! 1d0/sqrt(3d0)
         r2vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
@@ -137,8 +172,10 @@ contains
                               xi*cos(strike_rad)
                     zsource = zf + eta*sin(dip_rad)
                     !   calculate displacement by Okada model
+                    ! call call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
+                    !                 dip_pass, area/4., strike, uret)
                     call call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
-                                    dip_pass, area/4., strike, uret)
+                                    dip, area/4d0, strike, uret)
                     !   add contribution from the point source
                     do idim = 1, 3
                         uobs(idim) = uobs(idim) + uret(idim)
