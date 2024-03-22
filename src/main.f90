@@ -7,11 +7,12 @@ program main
     implicit none
     integer :: i, j
     ! number of fault planes
-    integer :: nplane
+    integer :: iplane, nplane
     ! number of samples
     integer :: nparticle_slip, nparticle_fault
     ! number of patches
     integer :: nxi, neta
+    integer, allocatable :: nxi_ls(:), neta_ls(:)
     ! dimension of  parameter
     integer :: ndim_fault, ndim_slip
     ! number of patches, nodes, dof
@@ -94,6 +95,8 @@ program main
         open (17, file="data/setting.dat", status="old")
         read (17, *) ! number of fault planes
         read (17, *) nplane
+        allocate(nxi_ls(nplane))
+        allocate(neta_ls(nplane))
         read (17, *)
         read (17, *) ! number of samples for fault
         read (17, *) nparticle_fault
@@ -107,6 +110,11 @@ program main
         read (17, *)
         read (17, *) ! max slip(m)
         read (17, *) max_slip
+        read (17, *)
+        read (17, *) ! nxi
+        read (17, *) nxi_ls
+        read (17, *) ! neta
+        read (17, *) neta_ls
         close (17)
         print *, "nplane: ", nplane
         print *, "nparticle_fault: ", nparticle_fault
@@ -114,11 +122,20 @@ program main
         print *, "observation_path: ", observation_path
         print *, "output_dir: ", output_dir
         print *, "max_slip: ", max_slip
+        print *, "nxi_ls: ", nxi_ls
+        print *, "neta_ls: ", neta_ls
     end if
     call mpi_bcast(nplane, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(nparticle_fault, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(nparticle_slip, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(max_slip, 1, mpi_double_precision, 0, mpi_comm_world, ierr)
+    if (myid /= 0) then
+        allocate(nxi_ls(nplane))
+        allocate(neta_ls(nplane))
+    end if
+    call mpi_bcast(nxi_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
+    call mpi_bcast(neta_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
+
     if (mod(nparticle_fault, numprocs) /= 0) then
         if (myid == 0) then
             print *, "invalid number of MPI processes"
@@ -134,15 +151,17 @@ program main
         call system(command)
     end if
 
-    ! number of patches (per fault plane)
-    nxi = 6
-    neta = 6
-
     ! number of patches, nodes, dof
-    npatch = nxi*neta*nplane
-    nnode = (nxi + 1)*(neta + 1)*nplane
+    npatch = 0
+    nnode = 0
+    do iplane = 1, nplane
+        nxi = nxi_ls(iplane)
+        neta = neta_ls(iplane)
+        npatch = npatch + nxi*neta
+        nnode = nnode + (nxi + 1)*(neta + 1)
+    end do
     ndof = nnode
-    ! ndof = (nxi - 1)*(neta - 1)*nplane
+    print *, npatch, nnode, ndof
 
     ! dimension of fault parameter
     ndim_fault = 2 + 8*nplane
@@ -292,41 +311,41 @@ program main
     do i = 1, ndim_fault + 1
         tmp(i) = 0d0
     end do
-    ! open (10, file="64.csv", status='old')
-    ! ! open (10, file="output_obs_delbc/18.csv", status='old')
-    ! do i = 1, nparticle_fault
-    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    !     read (10, *) tmp
-    !     do j = 1, ndim_fault
-    !         particle(j) = particle(j) + tmp(j)
-    !     end do
-    ! end do
-    ! close (10)
-    ! tmp = particle
-    ! do j = 1, ndim_fault
-    !     particle(j) = particle(j)/nparticle_fault
-    ! end do
-    ! open (10, file="mean_fault.dat", status="replace")
-    ! do i = 1, ndim_fault
-    !     write (10, *) particle(i)
-    ! end do
-    ! close (10)
-
-    ! ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
-    ! ! ! ! !       status="old")
-    ! ! open (10, file="data/theta.dat", status="old")
-    open (10, file="mean_fault.dat", status="old")
-    do i = 1, ndim_fault
-        read (10, *) particle(i)
+    open (10, file="output_obs_delbc/21.csv", status='old')
+    ! open (10, file="output_obs_delbc/18.csv", status='old')
+    do i = 1, nparticle_fault
+        ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+        !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+        read (10, *) tmp
+        do j = 1, ndim_fault
+            particle(j) = particle(j) + tmp(j)
+        end do
     end do
     close (10)
-    print *, particle
+    tmp = particle
+    do j = 1, ndim_fault
+        particle(j) = particle(j)/nparticle_fault
+    end do
+    open (10, file="mean_fault.dat", status="replace")
+    do i = 1, ndim_fault
+        write (10, *) particle(i)
+    end do
+    close (10)
+
+    ! ! ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
+    ! ! ! ! ! !       status="old")
+    ! ! ! open (10, file="data/theta.dat", status="old")
+    ! open (10, file="mean_fault.dat", status="old")
+    ! do i = 1, ndim_fault
+    !     read (10, *) particle(i)
+    ! end do
+    ! close (10)
+    ! print *, particle
 
     st_time = omp_get_wtime()
     print *, "start"
     neglog = fault_calc_likelihood( &
-             particle, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+             particle, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
              coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
              lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
              obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -388,7 +407,7 @@ program main
 
     ! call fault_smc_exec( &
     !     output_dir, range, nplane, nparticle_fault, ndim_fault, &
-    !     myid, numprocs, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !     myid, numprocs, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
     !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
     !     lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
     !     obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -449,7 +468,7 @@ contains
                 particle(j) = work_fault_particles(j, i)
             end do
 
-            neglog = fault_calc_likelihood(particle, nplane, nxi, neta, nnode, ndof, &
+            neglog = fault_calc_likelihood(particle, nplane, nxi_ls, neta_ls, nnode, ndof, &
                                            nsar, ngnss, nobs, cny_fault, coor_fault, node_to_elem_val, &
                                            node_to_elem_size, id_dof, luni, lmat, lmat_index, lmat_val, &
                                            ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
@@ -563,7 +582,7 @@ contains
                 particle(idim) = fault_particles(idim, iparticle)
             end do
 
-            call discretize_fault(particle, nplane, nxi, neta, cny_fault, coor_fault, &
+            call discretize_fault(particle, nplane, nxi_ls, neta_ls, cny_fault, coor_fault, &
                                   node_to_elem_val, node_to_elem_size, id_dof)
 
             ! loop for patchs

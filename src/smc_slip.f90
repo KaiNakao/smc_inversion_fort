@@ -209,10 +209,8 @@ contains
                 call slip_BoxMuller(v1, v2)
                 x = mu_i + v1*sqrt(sigma2_i)
                 fx = cdf_norm(x, mu_i, sigma2_i)
-                ! f1 = cdf_norm(max_slip, mu_i, sigma2_i)
-                ! f0 = cdf_norm(0d0, mu_i, sigma2_i)
-                f1 = cdf_norm(1d6, mu_i, sigma2_i)
-                f0 = cdf_norm(-1d6, mu_i, sigma2_i)
+                f1 = cdf_norm(max_slip, mu_i, sigma2_i)
+                f0 = cdf_norm(0d0, mu_i, sigma2_i)
 
                 ! solve F(y) = (F(1) - F(0)) F(x) + F(0) by Newton's method
                 ! where F(:) is CDF of normal distribution
@@ -667,7 +665,7 @@ contains
             end do
         end do
 !$omp end parallel do
-        print *, "acc_rate: ", acc_rate
+        ! print *, "acc_rate: ", acc_rate
         !   update configurations
 !$omp parallel do private(iparticle, idim)
         do iparticle = 1, nparticle
@@ -715,19 +713,19 @@ contains
                 return
             end if
             ! ! reflection
-            ! do while (particle_cand(idim) < 0d0 .or. &
-            !           particle_cand(idim) > max_slip)
-            !     if (particle_cand(idim) > max_slip) then
-            !         particle_cand(idim) = &
-            !             2*max_slip - particle_cand(idim)
-            !         pvec(idim) = -pvec(idim)
-            !     end if
-            !     if (particle_cand(idim) < 0d0) then
-            !         particle_cand(idim) = &
-            !             -particle_cand(idim)
-            !         pvec(idim) = -pvec(idim)
-            !     end if
-            ! end do
+            do while (particle_cand(idim) < 0d0 .or. &
+                      particle_cand(idim) > max_slip)
+                if (particle_cand(idim) > max_slip) then
+                    particle_cand(idim) = &
+                        2*max_slip - particle_cand(idim)
+                    pvec(idim) = -pvec(idim)
+                end if
+                if (particle_cand(idim) < 0d0) then
+                    particle_cand(idim) = &
+                        -particle_cand(idim)
+                    pvec(idim) = -pvec(idim)
+                end if
+            end do
             ! if (ieee_is_nan(particle_cand(idim))) then
             !     print *, "particle_cand is nan"
             !     print *, "pvec: ", pvec
@@ -785,19 +783,19 @@ contains
                     return
                 end if
                 ! ! reflection
-                ! do while (particle_cand(idim) < 0d0 .or. &
-                !           particle_cand(idim) > max_slip)
-                !     if (particle_cand(idim) > max_slip) then
-                !         particle_cand(idim) = &
-                !             2*max_slip - particle_cand(idim)
-                !         pvec(idim) = -pvec(idim)
-                !     end if
-                !     if (particle_cand(idim) < 0d0) then
-                !         particle_cand(idim) = &
-                !             -particle_cand(idim)
-                !         pvec(idim) = -pvec(idim)
-                !     end if
-                ! end do
+                do while (particle_cand(idim) < 0d0 .or. &
+                          particle_cand(idim) > max_slip)
+                    if (particle_cand(idim) > max_slip) then
+                        particle_cand(idim) = &
+                            2*max_slip - particle_cand(idim)
+                        pvec(idim) = -pvec(idim)
+                    end if
+                    if (particle_cand(idim) < 0d0) then
+                        particle_cand(idim) = &
+                            -particle_cand(idim)
+                        pvec(idim) = -pvec(idim)
+                    end if
+                end do
                 ! if (ieee_is_nan(particle_cand(idim))) then
                 !     print *, "particle_cand is nan"
                 !     print *, "pvec: ", pvec
@@ -1141,7 +1139,7 @@ contains
         ! ntau_lower = max(ntau_mean - 20, 1)
         ! print *, "ntau range: ", ntau_lower, ntau_upper
         ! print *, "ntau mean: ", ntau_mean
-        print *, "dtau range: ", exp(log_dtau_lower), exp(log_dtau_upper)
+        ! print *, "dtau range: ", exp(log_dtau_lower), exp(log_dtau_upper)
 
     end subroutine slip_hmc_tuning
 
@@ -1232,7 +1230,7 @@ contains
 
                 !  metropolis test
                 metropolis = metropolis_ls(jparticle)
-                if (exp(post_cur - post_cand) > metropolis) then
+                if (post_cur - post_cand > log(metropolis)) then
                     ! accept
                     do idim = 1, ndim
                         particle_cur(idim) = particle_cand(idim)
@@ -1392,7 +1390,7 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
-            print *, "gamma: ", gamma
+            ! print *, "gamma: ", gamma
             neglog_ret = neglog_ret + neglog_evidence
             if (iter > 200) then
                 neglog_ret = 1d10
@@ -1470,7 +1468,9 @@ contains
             !     do idim = 1, ndim
             !         write (17, "(f12.5)", advance="no") particles(idim, iparticle)
             !     end do
-            !     write (17, "(f12.5)") likelihood_ls(iparticle)
+            !     write (17, "(f12.5)", advance="no") likelihood_ls(iparticle)
+            !     write (17, "(f12.5)", advance="no") prior_ls(iparticle)
+            !     write (17, *)
             ! end do
             ! close (17)
             iter = iter + 1

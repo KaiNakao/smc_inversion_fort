@@ -63,22 +63,31 @@ contains
         close (10)
     end subroutine read_observation2
 
-    subroutine discretize_fault(theta, nplane, nxi, neta, cny, coor, &
+    subroutine discretize_fault(theta, nplane, nxi_ls, neta_ls, cny, coor, &
                                 node_to_elem_val, node_to_elem_size, id_dof)
         implicit none
         double precision, intent(in) :: theta(:)
-        integer, intent(in) :: nplane, nxi, neta
+        integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:)
         double precision, intent(inout) :: coor(:, :)
         integer, intent(inout) :: cny(:, :), &
                                   node_to_elem_val(:, :), &
                                   node_to_elem_size(:), &
                                   id_dof(:)
         integer :: i, j, k, cnt, node_id, patch_id, iplane
+        integer :: offset_node, offset_patch
+        integer :: nxi, neta
         integer :: node1, node2, node3, node4
         double precision :: xi, eta, dxi, deta, lxi, leta
 
         cnt = 1
+        offset_node = 0
+        offset_patch = 0
         do iplane = 1, nplane
+            print *, "iplane: ", iplane
+            nxi = nxi_ls(iplane)
+            neta = neta_ls(iplane)
+            print *, "nxi: ", nxi
+            print *, "neta: ", neta
             lxi = theta(iplane*8 - 2)
             leta = theta(iplane*8 - 1)
             ! length of a patch
@@ -88,8 +97,9 @@ contains
             ! coordinate of nodes
             do j = 1, neta + 1
                 do i = 1, nxi + 1
-                    node_id = i + (nxi + 1)*(j - 1) &
-                              + (iplane - 1)*(nxi + 1)*(neta + 1)
+                    ! node_id = i + (nxi + 1)*(j - 1) &
+                    !           + (iplane - 1)*(nxi + 1)*(neta + 1) + offset
+                    node_id = i + (nxi + 1)*(j - 1) + offset_node
                     xi = (i - 1)*dxi - lxi/2d0
                     eta = (j - 1)*deta - leta/2d0
                     coor(1, node_id) = xi
@@ -112,10 +122,13 @@ contains
             ! node id of patches
             do j = 1, neta
                 do i = 1, nxi
-                    patch_id = i + nxi*(j - 1) &
-                               + (iplane - 1)*nxi*neta
+                    ! patch_id = i + nxi*(j - 1) &
+                    !            + (iplane - 1)*nxi*neta
+                    patch_id = offset_patch + i + nxi*(j - 1)
+                    ! node1 = i + (nxi + 1)*(j - 1) &
+                    !         + (iplane - 1)*(nxi + 1)*(neta + 1)
                     node1 = i + (nxi + 1)*(j - 1) &
-                            + (iplane - 1)*(nxi + 1)*(neta + 1)
+                            + offset_node
                     node2 = node1 + 1
                     node3 = node2 + nxi + 1
                     node4 = node1 + nxi + 1
@@ -131,16 +144,18 @@ contains
                     end do
                 end do
             end do
+            offset_patch = offset_patch + nxi * neta
+            offset_node = offset_node + (nxi + 1) * (neta + 1)
         end do
     end subroutine discretize_fault
 
-    subroutine gen_laplacian(theta, nplane, nnode, nxi, neta, id_dof, ndof, luni, lmat)
+    subroutine gen_laplacian(theta, nplane, nnode, nxi_ls, neta_ls, id_dof, ndof, luni, lmat)
         implicit none
-        integer, intent(in) :: nplane, nnode, nxi, neta, id_dof(:), ndof
+        integer, intent(in) :: nplane, nnode, nxi_ls(:), neta_ls(:), id_dof(:), ndof
         double precision, intent(in) :: theta(:)
         double precision, intent(inout) ::  luni(:, :), lmat(:, :)
         double precision :: dxi, deta, lxi, leta
-        integer :: iplane, inode, idof, jnode
+        integer :: iplane, inode, idof, jnode, nxi, neta, offset
         ! laplacian for single component
         do jnode = 1, nnode
             do inode = 1, nnode
@@ -148,17 +163,21 @@ contains
             end do
         end do
 
+        offset = 0
         do iplane = 1, nplane
+            nxi = nxi_ls(iplane)
+            neta = neta_ls(iplane)
             lxi = theta(iplane*8 - 2)
             leta = theta(iplane*8 - 1)
             dxi = lxi/nxi
             deta = leta/neta
-            do inode = &
-                1 + (nxi + 1)*(neta + 1)*(iplane - 1), (nxi + 1)*(neta + 1)*iplane
-                if (mod(inode - 1, nxi + 1) == 0) then
+            ! do inode = &
+            !     1 + (nxi + 1)*(neta + 1)*(iplane - 1), (nxi + 1)*(neta + 1)*iplane
+            do inode = offset + 1, offset + (nxi + 1) * (neta + 1)
+                if (mod(inode - 1 - offset, nxi + 1) == 0) then
                     luni(inode, inode + 1) = luni(inode, inode + 1) + 2d0/dxi**2d0
                     luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
-                else if (mod(inode - 1, nxi + 1) == nxi) then
+                else if (mod(inode - 1 - offset, nxi + 1) == nxi) then
                     luni(inode, inode - 1) = luni(inode, inode - 1) + 2d0/dxi**2d0
                     luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
                 else
@@ -167,10 +186,10 @@ contains
                     luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
                 end if
 
-                if (mod((inode - 1)/(nxi + 1), neta + 1) == 0) then
+                if (mod((inode - 1 - offset)/(nxi + 1), neta + 1) == 0) then
                     luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 2d0/deta**2d0
                     luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
-                else if (mod((inode - 1)/(nxi + 1), neta + 1) == neta) then
+                else if (mod((inode - 1 - offset)/(nxi + 1), neta + 1) == neta) then
                     luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 2d0/deta**2d0
                     luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
                 else
@@ -179,6 +198,7 @@ contains
                     luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
                 end if
             end do
+            offset = offset + (nxi + 1) * (neta + 1)
         end do
 
         ! laplacian for two components(u_xi, u_eta)
