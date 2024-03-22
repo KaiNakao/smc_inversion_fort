@@ -294,8 +294,7 @@ contains
         end do
 !$omp end parallel do
 
-        print *, "likelihood_ls", likelihood_ls
-        cv_threshold = 1d0
+        cv_threshold = 2d0
         ! binary search for the next gamma
         ! such that c.o.v of the weight is equivalent to cv_threashold
         lower = gamma_prev
@@ -535,7 +534,6 @@ contains
                 floor((weights(iparticle) - u)*d_nparticle) + 1
             u = u + assigned_num(iparticle)/d_nparticle - weights(iparticle)
         end do
-        print *, "assigned_num: ", assigned_num
     end subroutine slip_resample_particles
 
     subroutine slip_hmc_sampling(gamma, particles, particles_new, &
