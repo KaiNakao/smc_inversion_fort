@@ -1381,7 +1381,7 @@ contains
         neglog_ret = 0d0
 
         do while (1d0 - gamma > 10d-8)
-            print *, "iter: ", iter
+            ! print *, "iter: ", iter
             ! do iiter = 1, 10
             st_time1 = omp_get_wtime()
             ! S_j
@@ -1389,7 +1389,7 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
-            print *, "gamma: ", gamma
+            ! print *, "gamma: ", gamma
             neglog_ret = neglog_ret + neglog_evidence
             if (iter > 200) then
                 neglog_ret = 1d10
