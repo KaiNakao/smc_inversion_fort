@@ -508,17 +508,17 @@ contains
             do idim = 1, ndim
                 particle_cand(idim) = particle_cur(idim) + st_rand(idim)
             end do
-            ! ! range constraints
-            ! do idim = 1, ndim
-            !     if (range(2, idim) - range(1, idim) > 1d-3) then
-            !         if (particle_cand(idim) < range(1, idim)) then
-            !             particle_cand(idim) = min(2*range(1, idim) - particle_cand(idim), range(2, idim))
-            !         end if
-            !         if (particle_cand(idim) > range(2, idim)) then
-            !             particle_cand(idim) = max(2*range(2, idim) - particle_cand(idim), range(1, idim))
-            !         end if
-            !     end if
-            ! end do
+            ! range constraints
+            do idim = 1, ndim
+                if (range(2, idim) - range(1, idim) > 1d-3) then
+                    if (particle_cand(idim) < range(1, idim)) then
+                        particle_cand(idim) = min(2*range(1, idim) - particle_cand(idim), range(2, idim))
+                    end if
+                    if (particle_cand(idim) > range(2, idim)) then
+                        particle_cand(idim) = max(2*range(2, idim) - particle_cand(idim), range(1, idim))
+                    end if
+                end if
+            end do
             ! calculate negative log likelihood of the proposed configuration
             likelihood_cand = fault_calc_likelihood( &
                                 particle_cand, nplane, nxi, neta, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
