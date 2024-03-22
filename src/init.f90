@@ -83,11 +83,8 @@ contains
         offset_node = 0
         offset_patch = 0
         do iplane = 1, nplane
-            print *, "iplane: ", iplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            print *, "nxi: ", nxi
-            print *, "neta: ", neta
             lxi = theta(iplane*8 - 2)
             leta = theta(iplane*8 - 1)
             ! length of a patch
