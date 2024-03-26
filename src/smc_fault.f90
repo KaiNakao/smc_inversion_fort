@@ -356,11 +356,11 @@ contains
         end do
         write (*, *)
 
-        do jdim = 1, ndim
-            do idim = 1, ndim
-                cov(idim, jdim) = cov(idim, jdim)*0.04d0
-            end do
-        end do
+        ! do jdim = 1, ndim
+        !     do idim = 1, ndim
+        !         cov(idim, jdim) = cov(idim, jdim)*0.04d0
+        !     end do
+        ! end do
 
         ! LAPACK function for LU decomposition of matrix
         call dpotrf('L', ndim, cov, ndim, ierr)
@@ -376,11 +376,10 @@ contains
         double precision, intent(inout) :: particles(:,:), tmp_particles(:,:)
         integer :: iparticle, jparticle, idim, cnt
         double precision ::  d_nparticle, u
-        d_nparticle = nparticle
+        d_nparticle = dble(nparticle)
         ! systematic residual resampling
         call random_number_correction(u)
         u = u/d_nparticle
-        ! for(iparticle=0 iparticle < nparticle iparticle + +) {
         do iparticle = 1, nparticle
             assigned_num(iparticle) = &
                 floor((weights(iparticle) - u)*d_nparticle) + 1
@@ -463,12 +462,13 @@ contains
                                   slip_mean, slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
                                   slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                   slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-                                  slip_particle_cand, slip_st_rand, work_acc_count, range)
+                                  slip_particle_cand, slip_st_rand, work_acc_count, range, &
+                                  work_hls, work_score_ls)
         implicit none
         integer, intent(in) :: work_assigned_num(:), nplane, id_start(:), work_size, ndim, myid, &
                                nxi_ls(:), neta_ls(:), nnode, ndof, nsar, ngnss, nobs, nparticle_slip
         double precision, intent(in) :: work_particles(:, :), work_likelihood_ls(:), cov(:, :), gamma, obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :)
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :), work_hls(:)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
                                   id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
                                   slip_assigned_num(:), slip_id_start(:), work_acc_count
@@ -479,13 +479,14 @@ contains
             uobs(:), uret(:), slip_particles(:, :), slip_particles_new(:, :), slip_likelihood_ls(:), &
             slip_prior_ls(:), slip_weights(:), slip_mean(:), slip_cov(:, :), slip_likelihood_ls_new(:), &
             slip_prior_ls_new(:), slip_st_rand_ls(:, :), slip_metropolis_ls(:), gsvec(:), lsvec(:), &
-            slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:)
+            slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:), work_score_ls(:)
         integer :: iparticle, jparticle, idim, jdim, nassigned, istart
-        double precision :: likelihood_cur, likelihood_cand, metropolis
-        double precision :: v1, v2
+        double precision :: likelihood_cur, likelihood_cand, metropolis, h
+        double precision :: v1, v2, score
 
         work_acc_count = 0
         do iparticle = 1, work_size
+            h = work_hls(iparticle)
             do idim = 1, ndim
                 particle_cur(idim) = work_particles(idim, iparticle)
             end do
@@ -510,7 +511,7 @@ contains
             call dtrmv('l', 'n', 'n', &
                         ndim, cov, ndim, st_rand, 1)
             do idim = 1, ndim
-                particle_cand(idim) = particle_cur(idim) + st_rand(idim)
+                particle_cand(idim) = particle_cur(idim) + h * st_rand(idim)
             end do
             ! range constraints
             do idim = 1, ndim
@@ -536,6 +537,16 @@ contains
                                 slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                 slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                 slip_particle_cand, slip_st_rand, 0, "")
+        
+            ! calculate score
+            score = 0d0
+            do idim = 1, ndim
+                score = score + st_rand(idim)**2
+            end do
+            score = score * h**2 
+            score = score * exp(min(0d0, gamma*(likelihood_cur - likelihood_cand)))
+            work_score_ls(iparticle) = score
+            
             ! metropolis test and check domain of definition
             call random_number_correction(metropolis)
             if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
@@ -544,7 +555,9 @@ contains
                 end do
                 likelihood_cur = likelihood_cand
                 work_acc_count = work_acc_count + 1d0
+                print *, "accept: ", h, score
             else
+                print *, "reject: ", h, score
             end if
             ! save to new particle list
             work_likelihood_ls_new(iparticle) = likelihood_cur
@@ -555,6 +568,178 @@ contains
         end do
 
     end subroutine work_mcmc_sampling
+
+    subroutine work_mcmc_tuning(work_assigned_num, work_particles, &
+                            work_particles_new, work_likelihood_ls, &
+                            work_likelihood_ls_new, nplane, id_start, &
+                            particle_cur, particle_cand, &
+                            st_rand, work_size, ndim, &
+                            cov, gamma, myid, nxi_ls, neta_ls, nnode, ndof, &
+                            nsar, ngnss, nobs, cny_fault, coor_fault, &
+                            node_to_elem_val, node_to_elem_size, id_dof, &
+                            luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
+                            slip_dist, obs_points, obs_unitvec, obs_sigma, &
+                            sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+                            xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
+                            nvec, response_dist, uobs, uret, slip_particles, &
+                            slip_particles_new, nparticle_slip, max_slip, dvec, &
+                            slip_likelihood_ls, slip_prior_ls, slip_weights, &
+                            slip_mean, slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+                            slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+                            slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+                            slip_particle_cand, slip_st_rand, work_acc_count, range, &
+                            work_hls, work_score_ls)
+
+        implicit none
+        integer, intent(in) :: work_assigned_num(:), nplane, id_start(:), work_size, ndim, myid, &
+                               nxi_ls(:), neta_ls(:), nnode, ndof, nsar, ngnss, nobs, nparticle_slip
+        double precision, intent(in) :: work_particles(:, :), work_likelihood_ls(:), cov(:, :), gamma, obs_points(:, :), &
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :), work_hls(:)
+        integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
+                                  id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
+                                  slip_assigned_num(:), slip_id_start(:), work_acc_count
+        double precision, intent(inout) :: work_particles_new(:, :), work_likelihood_ls_new(:), &
+            particle_cur(:), particle_cand(:), st_rand(:), coor_fault(:, :), luni(:, :), &
+            lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), sigma2_full(:), alpha2_full(:), &
+            xinode(:), etanode(:), uxinode(:), uetanode(:), r1vec(:), r2vec(:), nvec(:), response_dist(:, :), &
+            uobs(:), uret(:), slip_particles(:, :), slip_particles_new(:, :), slip_likelihood_ls(:), &
+            slip_prior_ls(:), slip_weights(:), slip_mean(:), slip_cov(:, :), slip_likelihood_ls_new(:), &
+            slip_prior_ls_new(:), slip_st_rand_ls(:, :), slip_metropolis_ls(:), gsvec(:), lsvec(:), &
+            slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:), work_score_ls(:)
+        integer :: iparticle, jparticle, idim, jdim, nassigned, istart
+        double precision :: likelihood_cur, likelihood_cand, metropolis, h
+        double precision :: v1, v2, score
+
+        do iparticle = 1, work_size
+            h = work_hls(iparticle)
+            do idim = 1, ndim
+                particle_cur(idim) = work_particles(idim, iparticle)
+            end do
+            likelihood_cur = work_likelihood_ls(iparticle)
+            ! propose particle_cand
+            do idim = 1, ndim
+                call fault_box_muller(v1, v2)
+                st_rand(idim) = v1
+            end do
+            call dtrmv('l', 'n', 'n', &
+                        ndim, cov, ndim, st_rand, 1)
+            do idim = 1, ndim
+                particle_cand(idim) = particle_cur(idim) + h * st_rand(idim)
+            end do
+            ! range constraints
+            do idim = 1, ndim
+                if (range(2, idim) - range(1, idim) > 1d-3) then
+                    if (particle_cand(idim) < range(1, idim)) then
+                        particle_cand(idim) = min(2*range(1, idim) - particle_cand(idim), range(2, idim))
+                    end if
+                    if (particle_cand(idim) > range(2, idim)) then
+                        particle_cand(idim) = max(2*range(2, idim) - particle_cand(idim), range(1, idim))
+                    end if
+                end if
+            end do
+            ! calculate negative log likelihood of the proposed configuration
+            likelihood_cand = fault_calc_likelihood( &
+                                particle_cand, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+                                coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+                                lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+                                obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+                                xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+                                uobs, uret, slip_particles, slip_particles_new, &
+                                nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
+                                slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
+                                slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+                                slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+                                slip_particle_cand, slip_st_rand, 0, "")
+            ! calculate score
+            score = 0d0
+            do idim = 1, ndim
+                score = score + st_rand(idim)**2
+            end do
+            score = score * h**2 
+            score = score * exp(min(0d0, gamma*(likelihood_cur - likelihood_cand)))
+            work_score_ls(iparticle) = score
+            
+            ! metropolis test and check domain of definition
+            call random_number_correction(metropolis)
+            if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
+                do idim = 1, ndim
+                    particle_cur(idim) = particle_cand(idim)
+                end do
+                likelihood_cur = likelihood_cand
+            else
+            end if
+        end do
+    end subroutine work_mcmc_tuning
+
+    subroutine fault_sample_h(hls, nparticle, h_upper, h_lower)
+        double precision, intent(inout) :: hls(:), h_upper, h_lower
+        double precision :: u
+        integer, intent(in) :: nparticle 
+        integer :: iparticle
+
+        ! uniform distribution [h_lower, h_upper]
+        do iparticle = 1, nparticle
+            call random_number_correction(u)
+            hls(iparticle) = h_lower + u * (h_upper - h_lower)
+        end do
+    end subroutine
+
+    subroutine fault_resample_h(hls, tmp_hls, score_ls, nparticle, &
+                                weights_h, assigned_num_h, h_upper, h_lower)
+        double precision, intent(in) :: score_ls(:)
+        double precision, intent(inout) :: hls(:), tmp_hls(:), &
+                                           weights_h(:), h_upper, h_lower
+        integer, intent(inout) :: assigned_num_h(:)
+        integer, intent(in) :: nparticle
+
+        double precision :: sum_score, h_mean
+        double precision :: d_nparticle, u, v1, v2, h
+        integer :: iparticle, jparticle, cnt
+
+        sum_score = 0d0
+        do iparticle = 1, nparticle
+            sum_score = sum_score + (score_ls(iparticle) + 1d3)
+        end do
+        do iparticle = 1, nparticle
+            weights_h(iparticle) = (score_ls(iparticle) + 1d3)/sum_score
+        end do
+
+        d_nparticle = dble(nparticle)
+        ! systematic residual resampling
+        call random_number_correction(u)
+        u = u/d_nparticle
+        do iparticle = 1, nparticle
+            assigned_num_h(iparticle) = &
+                floor((weights_h(iparticle) - u)*d_nparticle) + 1
+            u = u + assigned_num_h(iparticle)/d_nparticle - weights_h(iparticle)
+        end do
+
+        do iparticle = 1, nparticle
+            tmp_hls(iparticle) = hls(iparticle)
+        end do
+
+        cnt = 1
+        h_mean = 0d0
+        do iparticle = 1, nparticle
+            do jparticle = 1, assigned_num_h(iparticle)
+                h = tmp_hls(iparticle)
+                ! pertubate
+                call fault_box_muller(v1, v2)
+                h = h - 0.015d0 * v1
+                if (h < 0d0) then
+                    h = 0d0
+                end if
+                hls(cnt) = h
+                h_mean = h_mean + h
+                cnt = cnt + 1
+            end do
+        end do
+        h_mean = h_mean / dble(nparticle)
+
+        h_upper = h_mean + 0.5d0
+        h_lower = max(h_mean - 0.5d0, 0d0)
+
+    end subroutine fault_resample_h
 
     subroutine fault_smc_exec( &
         output_dir, range, nplane, nparticle, ndim, &
@@ -616,6 +801,13 @@ contains
         double precision :: acc_rate
         integer :: work_acc_count, acc_count
 
+        ! for tuning h
+        double precision, allocatable :: work_hls(:), hls(:), &
+                                         tmp_hls(:), score_ls(:), &
+                                         weights_h(:), work_score_ls(:)
+        double precision :: h_upper, h_lower
+        integer, allocatable :: assigned_num_h(:)
+
         ! measuring time
         double precision :: st_time, en_time
 
@@ -633,12 +825,19 @@ contains
             allocate (sorted_idx(nparticle))
             allocate (tmp_particles(ndim, nparticle))
             allocate (tmp_assigned_num(nparticle))
+            allocate (hls(nparticle))
+            allocate (score_ls(nparticle))
+            allocate (tmp_hls(nparticle))
+            allocate (weights_h(nparticle))
+            allocate (assigned_num_h(nparticle))
         else
             allocate (particles(1, 1))
             allocate (likelihood_ls(1))
             allocate (assigned_num(1))
             allocate (sum_assigned_ls(1))
             allocate (displs(1))
+            allocate (hls(1))
+            allocate (score_ls(1))
         end if
 
         allocate (work_particles(ndim, work_size))
@@ -646,6 +845,8 @@ contains
         allocate (work_likelihood_ls(50*work_size))
         allocate (work_likelihood_ls_new(50*work_size))
         allocate (work_assigned_num(work_size))
+        allocate (work_hls(work_size))
+        allocate (work_score_ls(work_size))
         allocate (particle_cur(ndim))
         allocate (particle_cand(ndim))
         allocate (id_start(work_size))
@@ -655,6 +856,8 @@ contains
         if (myid == 0) then
             ! sampling from the prior distribution
             call fault_sample_init_particles(particles, nparticle, ndim, range)
+            h_lower = 0d0
+            h_upper = 1d0
         end if
         call mpi_scatter(particles, ndim*work_size, mpi_double_precision, &
                          work_particles, ndim*work_size, mpi_double_precision, &
@@ -743,7 +946,44 @@ contains
             ! if (sum_assigned > 50*work_size) then
             !     print *, "too many samples assigned to process", myid
             ! end if
-            call mpi_barrier(mpi_comm_world, ierr)
+            
+            ! tuning h
+            if (myid == 0) then
+                call fault_sample_h(hls, nparticle, h_upper, h_lower)
+            end if
+            call mpi_scatter(hls, work_size, mpi_double_precision, &
+                             work_hls, work_size, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
+            call work_mcmc_tuning(work_assigned_num, work_particles, &
+                                  work_particles_new, work_likelihood_ls, &
+                                  work_likelihood_ls_new, nplane, id_start, &
+                                  particle_cur, particle_cand, &
+                                  st_rand, work_size, ndim, &
+                                  cov, gamma, myid, nxi_ls, neta_ls, nnode, ndof, &
+                                  nsar, ngnss, nobs, cny_fault, coor_fault, &
+                                  node_to_elem_val, node_to_elem_size, id_dof, &
+                                  luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
+                                  slip_dist, obs_points, obs_unitvec, obs_sigma, &
+                                  sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+                                  xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
+                                  nvec, response_dist, uobs, uret, slip_particles, &
+                                  slip_particles_new, nparticle_slip, max_slip, dvec, &
+                                  slip_likelihood_ls, slip_prior_ls, slip_weights, &
+                                  slip_mean, slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+                                  slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+                                  slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+                                  slip_particle_cand, slip_st_rand, work_acc_count, range, &
+                                  work_hls, work_score_ls)
+            call mpi_gather(work_score_ls, work_size, mpi_double_precision, &
+                            score_ls, work_size, mpi_double_precision, &
+                            0, mpi_comm_world, ierr)
+            if (myid == 0) then
+                call fault_resample_h(hls, tmp_hls, score_ls, nparticle, weights_h, assigned_num_h, h_upper, h_lower)
+                print *, "hls: ", hls
+            end if
+            call mpi_scatter(hls, work_size, mpi_double_precision, &
+                             work_hls, work_size, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
             st_time = omp_get_wtime()
             if (myid == 0) then
                 print *, "work_mcmc_sampling start"
@@ -766,7 +1006,8 @@ contains
                                     slip_mean, slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
                                     slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                     slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-                                    slip_particle_cand, slip_st_rand, work_acc_count, range)
+                                    slip_particle_cand, slip_st_rand, work_acc_count, range, &
+                                    work_hls, work_score_ls)
             call mpi_barrier(mpi_comm_world, ierr)
             en_time = omp_get_wtime()
             if (myid == 0) then
@@ -788,6 +1029,9 @@ contains
             !                  0, mpi_comm_world, ierr)
             call mpi_gather(work_likelihood_ls_new, work_size, mpi_double_precision, &
                             likelihood_ls, work_size, mpi_double_precision, &
+                            0, mpi_comm_world, ierr)
+            call mpi_gather(work_score_ls, work_size, mpi_double_precision, &
+                            score_ls, work_size, mpi_double_precision, &
                             0, mpi_comm_world, ierr)
             call mpi_gather(work_particles_new, work_size*ndim, mpi_double_precision, &
                             particles, work_size*ndim, mpi_double_precision, &
