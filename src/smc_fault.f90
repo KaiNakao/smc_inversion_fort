@@ -366,15 +366,13 @@ contains
         call dpotrf('L', ndim, cov, ndim, ierr)
     end subroutine fault_calc_cov_particles
 
-    subroutine fault_resample_particles(nparticle, weights, assigned_num, &
-        particles, tmp_particles, ndim)
+    subroutine fault_resample_particles(nparticle, weights, assigned_num)
         implicit none
 
-        integer, intent(in) :: nparticle, ndim
+        integer, intent(in) :: nparticle
         double precision, intent(in) :: weights(:)
         integer, intent(inout) :: assigned_num(:)
-        double precision, intent(inout) :: particles(:,:), tmp_particles(:,:)
-        integer :: iparticle, jparticle, idim, cnt
+        integer :: iparticle
         double precision ::  d_nparticle, u
         d_nparticle = nparticle
         ! systematic residual resampling
@@ -385,23 +383,6 @@ contains
             assigned_num(iparticle) = &
                 floor((weights(iparticle) - u)*d_nparticle) + 1
             u = u + assigned_num(iparticle)/d_nparticle - weights(iparticle)
-        end do
-
-        do iparticle = 1, nparticle
-            do idim = 1, ndim
-                tmp_particles(idim, iparticle) = &
-                    particles(idim, iparticle)
-            end do
-        end do
-
-        cnt = 1
-        do iparticle = 1, nparticle
-            do jparticle = 1, assigned_num(iparticle)
-                do idim = 1, ndim
-                    particles(idim, cnt) = tmp_particles(idim, iparticle)
-                end do
-                cnt = cnt + 1
-            end do
         end do
     end subroutine fault_resample_particles
 
@@ -486,6 +467,8 @@ contains
 
         work_acc_count = 0
         do iparticle = 1, work_size
+            nassigned = work_assigned_num(iparticle)
+            istart = id_start(iparticle)
             do idim = 1, ndim
                 particle_cur(idim) = work_particles(idim, iparticle)
             end do
@@ -502,55 +485,57 @@ contains
                              slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                              slip_particle_cand, slip_st_rand, 0, "")
             ! likelihood_cur = work_likelihood_ls(iparticle)
-            ! propose particle_cand
-            do idim = 1, ndim
-                call fault_box_muller(v1, v2)
-                st_rand(idim) = v1
-            end do
-            call dtrmv('l', 'n', 'n', &
-                        ndim, cov, ndim, st_rand, 1)
-            do idim = 1, ndim
-                particle_cand(idim) = particle_cur(idim) + st_rand(idim)
-            end do
-            ! range constraints
-            do idim = 1, ndim
-                if (range(2, idim) - range(1, idim) > 1d-3) then
-                    if (particle_cand(idim) < range(1, idim)) then
-                        particle_cand(idim) = min(2*range(1, idim) - particle_cand(idim), range(2, idim))
-                    end if
-                    if (particle_cand(idim) > range(2, idim)) then
-                        particle_cand(idim) = max(2*range(2, idim) - particle_cand(idim), range(1, idim))
-                    end if
-                end if
-            end do
-            ! calculate negative log likelihood of the proposed configuration
-            likelihood_cand = fault_calc_likelihood( &
-                                particle_cand, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
-                                coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-                                lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
-                                obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
-                                xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
-                                uobs, uret, slip_particles, slip_particles_new, &
-                                nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
-                                slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
-                                slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
-                                slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
-                                slip_particle_cand, slip_st_rand, 0, "")
-            ! metropolis test and check domain of definition
-            call random_number_correction(metropolis)
-            if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
+            do jparticle = istart, istart + nassigned - 1
+                ! propose particle_cand
                 do idim = 1, ndim
-                    particle_cur(idim) = particle_cand(idim)
+                    call fault_box_muller(v1, v2)
+                    st_rand(idim) = v1
                 end do
-                likelihood_cur = likelihood_cand
-                work_acc_count = work_acc_count + 1d0
-            else
-            end if
-            ! save to new particle list
-            work_likelihood_ls_new(iparticle) = likelihood_cur
-            do idim = 1, ndim
-                work_particles_new(idim, iparticle) = &
-                    particle_cur(idim)
+                call dtrmv('l', 'n', 'n', &
+                           ndim, cov, ndim, st_rand, 1)
+                do idim = 1, ndim
+                    particle_cand(idim) = particle_cur(idim) + st_rand(idim)
+                end do
+                ! range constraints
+                do idim = 1, ndim
+                    if (range(2, idim) - range(1, idim) > 1d-3) then
+                        if (particle_cand(idim) < range(1, idim)) then
+                            particle_cand(idim) = min(2*range(1, idim) - particle_cand(idim), range(2, idim))
+                        end if
+                        if (particle_cand(idim) > range(2, idim)) then
+                            particle_cand(idim) = max(2*range(2, idim) - particle_cand(idim), range(1, idim))
+                        end if
+                    end if
+                end do
+                ! calculate negative log likelihood of the proposed configuration
+                likelihood_cand = fault_calc_likelihood( &
+                                  particle_cand, nplane, nxi_ls_ls, neta_ls_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+                                  coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+                                  lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+                                  obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+                                  xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, response_dist, &
+                                  uobs, uret, slip_particles, slip_particles_new, &
+                                  nparticle_slip, max_slip, dvec, slip_likelihood_ls, slip_prior_ls, &
+                                  slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
+                                  slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
+                                  slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
+                                  slip_particle_cand, slip_st_rand, 0, "")
+                ! metropolis test and check domain of definition
+                call random_number_correction(metropolis)
+                if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
+                    do idim = 1, ndim
+                        particle_cur(idim) = particle_cand(idim)
+                    end do
+                    likelihood_cur = likelihood_cand
+                    work_acc_count = work_acc_count + 1d0
+                else
+                end if
+                ! save to new particle list
+                work_likelihood_ls_new(jparticle) = likelihood_cur
+                do idim = 1, ndim
+                    work_particles_new(idim, jparticle) = &
+                        particle_cur(idim)
+                end do
             end do
         end do
 
@@ -704,23 +689,22 @@ contains
                 call fault_calc_mean_particles(particles, weights, mean, nparticle, ndim)
                 call fault_calc_cov_particles(particles, weights, mean, cov, &
                                               nparticle, ndim)
-                call fault_resample_particles(nparticle, weights, assigned_num, &
-                                              particles, tmp_particles, ndim)
-                ! call fault_reorder_to_send(assigned_num, particles, tmp_assigned_num, &
-                !                            tmp_particles, sorted_idx, nparticle, ndim, &
-                !                            numprocs, work_size, tmp_likelihood_ls, likelihood_ls)
-                ! do iproc = 1, numprocs
-                !     sum_assigned = 0
-                !     do iparticle = (iproc - 1)*work_size + 1, iproc*work_size
-                !         sum_assigned = sum_assigned + assigned_num(iparticle)
-                !     end do
-                !     sum_assigned_ls(iproc) = sum_assigned
-                ! end do
-                ! print *, "sum_assigned", sum_assigned_ls
-                ! displs(1) = 0
-                ! do iproc = 1, numprocs
-                !     displs(iproc + 1) = displs(iproc) + sum_assigned_ls(iproc)
-                ! end do
+                call fault_resample_particles(nparticle, weights, assigned_num)
+                call fault_reorder_to_send(assigned_num, particles, tmp_assigned_num, &
+                                           tmp_particles, sorted_idx, nparticle, ndim, &
+                                           numprocs, work_size, tmp_likelihood_ls, likelihood_ls)
+                do iproc = 1, numprocs
+                    sum_assigned = 0
+                    do iparticle = (iproc - 1)*work_size + 1, iproc*work_size
+                        sum_assigned = sum_assigned + assigned_num(iparticle)
+                    end do
+                    sum_assigned_ls(iproc) = sum_assigned
+                end do
+                print *, "sum_assigned", sum_assigned_ls
+                displs(1) = 0
+                do iproc = 1, numprocs
+                    displs(iproc + 1) = displs(iproc) + sum_assigned_ls(iproc)
+                end do
             end if
             call mpi_bcast(gamma, 1, mpi_double_precision, 0, mpi_comm_world, ierr)
             call mpi_bcast(cov, ndim*ndim, mpi_double_precision, 0, mpi_comm_world, ierr)
@@ -730,19 +714,19 @@ contains
             call mpi_scatter(likelihood_ls, work_size, mpi_double_precision, &
                              work_likelihood_ls, work_size, mpi_double_precision, &
                              0, mpi_comm_world, ierr)
-            ! call mpi_scatter(assigned_num, work_size, mpi_integer, work_assigned_num, &
-            !                  work_size, mpi_integer, 0, mpi_comm_world, ierr)
+            call mpi_scatter(assigned_num, work_size, mpi_integer, work_assigned_num, &
+                             work_size, mpi_integer, 0, mpi_comm_world, ierr)
 
-            ! id_start(1) = 1
-            ! do iparticle = 1, work_size - 1
-            !     id_start(iparticle + 1) = &
-            !         id_start(iparticle) + work_assigned_num(iparticle)
-            ! end do
-            ! sum_assigned = &
-            !     id_start(work_size) + work_assigned_num(work_size) - 1
-            ! if (sum_assigned > 50*work_size) then
-            !     print *, "too many samples assigned to process", myid
-            ! end if
+            id_start(1) = 1
+            do iparticle = 1, work_size - 1
+                id_start(iparticle + 1) = &
+                    id_start(iparticle) + work_assigned_num(iparticle)
+            end do
+            sum_assigned = &
+                id_start(work_size) + work_assigned_num(work_size) - 1
+            if (sum_assigned > 50*work_size) then
+                print *, "too many samples assigned to process", myid
+            end if
             call mpi_barrier(mpi_comm_world, ierr)
             st_time = omp_get_wtime()
             if (myid == 0) then
@@ -773,25 +757,19 @@ contains
                 print *, "work_mcmc_sampling etime: ", en_time - st_time
             end if
 
-            ! call mpi_gatherv(work_likelihood_ls_new, sum_assigned, mpi_double_precision, &
-            !                  likelihood_ls, sum_assigned_ls, displs, mpi_double_precision, &
-            !                  0, mpi_comm_world, ierr)
-            ! if (myid == 0) then
-            !     do iproc = 1, numprocs
-            !         sum_assigned_ls(iproc) = sum_assigned_ls(iproc)*ndim
-            !         displs(iproc) = displs(iproc)*ndim
-            !     end do
-            !     displs(numprocs + 1) = displs(numprocs + 1)*ndim
-            ! end if
-            ! call mpi_gatherv(work_particles_new, sum_assigned*ndim, mpi_double_precision, &
-            !                  particles, sum_assigned_ls, displs, mpi_double_precision, &
-            !                  0, mpi_comm_world, ierr)
-            call mpi_gather(work_likelihood_ls_new, work_size, mpi_double_precision, &
-                            likelihood_ls, work_size, mpi_double_precision, &
-                            0, mpi_comm_world, ierr)
-            call mpi_gather(work_particles_new, work_size*ndim, mpi_double_precision, &
-                            particles, work_size*ndim, mpi_double_precision, &
-                            0, mpi_comm_world, ierr)
+            call mpi_gatherv(work_likelihood_ls_new, sum_assigned, mpi_double_precision, &
+                             likelihood_ls, sum_assigned_ls, displs, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
+            if (myid == 0) then
+                do iproc = 1, numprocs
+                    sum_assigned_ls(iproc) = sum_assigned_ls(iproc)*ndim
+                    displs(iproc) = displs(iproc)*ndim
+                end do
+                displs(numprocs + 1) = displs(numprocs + 1)*ndim
+            end if
+            call mpi_gatherv(work_particles_new, sum_assigned*ndim, mpi_double_precision, &
+                             particles, sum_assigned_ls, displs, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
             acc_count = 0
             call mpi_reduce(work_acc_count, acc_count, 1, mpi_integer, mpi_sum, 0, &
                             mpi_comm_world, ierr)
