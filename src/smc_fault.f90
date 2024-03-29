@@ -27,7 +27,7 @@ contains
     end subroutine fault_sample_init_particles
 
     double precision function fault_calc_likelihood( &
-        theta, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, &
+        theta, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, &
         ngnss, nobs, cny_fault, coor_fault, &
         node_to_elem_val, node_to_elem_size, id_dof, luni, &
         lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, &
@@ -47,7 +47,7 @@ contains
         implicit none
         double precision, intent(in) :: theta(:), obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
-        integer, intent(in) :: nxi_ls(:), neta_ls(:), nnode, ndof, nsar, ngnss, nobs, &
+        integer, intent(in) :: nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), nsar, ngnss, nobs, &
                                nparticle_slip, flag_output, nplane
         character(*), intent(in) :: output_path
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
@@ -73,13 +73,13 @@ contains
         call discretize_fault(theta, nplane, nxi_ls, neta_ls, cny_fault, coor_fault, &
                               node_to_elem_val, node_to_elem_size, id_dof)
         ! calculate laplacian matrix L
-        call gen_laplacian(theta, nplane, nnode, nxi_ls, neta_ls, id_dof, ndof, luni, lmat)
+        call gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, id_dof, ndof_total, luni, lmat)
 
         ! sparse matrix form of lmat
         call gen_sparse_lmat(lmat, lmat_index, lmat_val, ltmat_index, &
-                             ltmat_val, nnode, ndof)
+                             ltmat_val, nnode_total, ndof_total)
         ! matrix L^T L
-        call calc_ll(llmat, lmat, nnode, ndof)
+        call calc_ll(llmat, lmat, nnode_total, ndof_total)
         en_time = omp_get_wtime()
         ! print *, "init :", en_time - st_time
 
@@ -87,7 +87,7 @@ contains
         ! ! Calculate greens function for the sampled fault
         call calc_greens_func(theta, nplane, nxi_ls, neta_ls, gmat, slip_dist, cny_fault, coor_fault, obs_points, &
                               obs_unitvec, node_to_elem_val, node_to_elem_size, &
-                              id_dof, nsar, ngnss, nobs, nnode, ndof, target_id_val, &
+                              id_dof, nsar, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                               node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                               r1vec, r2vec, nvec, response_dist, uobs, uret)
         en_time = omp_get_wtime()
@@ -125,10 +125,10 @@ contains
         ! Sequential Monte Carlo sampling for slip
         ! calculate negative log of likelihood
         call slip_smc_exec( &
-            slip_particles, slip_particles_new, nparticle_slip, 2*ndof, &
+            slip_particles, slip_particles_new, nparticle_slip, 2*ndof_total, &
             flag_output, output_path, llmat, max_slip, dvec, sigma2_full, &
-            alpha2_full, theta, nplane, nxi, neta, gmat, log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, nobs, ndof, &
-            lmat_index, lmat_val, ltmat_index, ltmat_val, nnode, slip_likelihood_ls, slip_prior_ls, &
+            alpha2_full, theta, nplane, nxi, neta, gmat, log_sigma_sar2, log_sigma_gnss2, nsar, ngnss, nobs, ndof_total, &
+            lmat_index, lmat_val, ltmat_index, ltmat_val, nnode_total, slip_likelihood_ls, slip_prior_ls, &
             slip_weights, slip_mean, slip_cov, slip_likelihood_ls_new, &
             slip_prior_ls_new, slip_assigned_num, slip_id_start, id_dof, &
             slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
@@ -139,7 +139,7 @@ contains
     end function fault_calc_likelihood
 
     subroutine work_eval_init_particles(myid, work_size, nplane, ndim, particle_cur, &
-                                        work_particles, work_likelihood_ls, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, &
+                                        work_particles, work_likelihood_ls, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, &
                                         cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
                                         id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                         slip_dist, obs_points, obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
@@ -151,8 +151,8 @@ contains
                                         slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                         slip_particle_cur, slip_particle_cand, slip_st_rand)
         implicit none
-        integer, intent(in) :: myid, work_size, nplane, ndim, nxi_ls(:), neta_ls(:), nnode, &
-                               ndof, nsar, ngnss, nobs, nparticle_slip
+        integer, intent(in) :: myid, work_size, nplane, ndim, nxi_ls(:), neta_ls(:), nnode_total, &
+                               ndof_total, ndof_index(:), nsar, ngnss, nobs, nparticle_slip
         double precision, intent(in) :: work_particles(:, :), obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
@@ -173,7 +173,7 @@ contains
             end do
             ! calculate negative log likelihood for the sample
             likelihood = fault_calc_likelihood( &
-                         particle_cur, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+                         particle_cur, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, cny_fault, &
                          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
                          lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                          obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -432,7 +432,7 @@ contains
                                   nplane, id_start, &
                                   particle_cur, particle_cand, &
                                   st_rand, work_size, ndim, &
-                                  cov, gamma, myid, nxi_ls, neta_ls, nnode, ndof, &
+                                  cov, gamma, myid, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, &
                                   nsar, ngnss, nobs, cny_fault, coor_fault, &
                                   node_to_elem_val, node_to_elem_size, id_dof, &
                                   luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
@@ -448,7 +448,7 @@ contains
                                   slip_particle_cand, slip_st_rand, work_acc_count, range)
         implicit none
         integer, intent(in) :: work_assigned_num(:), nplane, id_start(:), work_size, ndim, myid, &
-                               nxi_ls(:), neta_ls(:), nnode, ndof, nsar, ngnss, nobs, nparticle_slip
+                               nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), nsar, ngnss, nobs, nparticle_slip
         double precision, intent(in) :: work_particles(:, :), work_likelihood_ls(:), cov(:, :), gamma, obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :)
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
@@ -474,7 +474,7 @@ contains
                 particle_cur(idim) = work_particles(idim, iparticle)
             end do
             likelihood_cur = fault_calc_likelihood( &
-                             particle_cur, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+                             particle_cur, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, cny_fault, &
                              coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
                              lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                              obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -510,7 +510,7 @@ contains
                 end do
                 ! calculate negative log likelihood of the proposed configuration
                 likelihood_cand = fault_calc_likelihood( &
-                                  particle_cand, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+                                  particle_cand, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, cny_fault, &
                                   coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
                                   lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                                   obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -544,7 +544,7 @@ contains
 
     subroutine fault_smc_exec( &
         output_dir, range, nplane, nparticle, ndim, &
-        myid, numprocs, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+        myid, numprocs, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, cny_fault, &
         coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
         lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
         obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -558,7 +558,7 @@ contains
         implicit none
         double precision, intent(in) :: obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :)
-        integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:), nnode, ndof, nsar, ngnss, nobs, &
+        integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), nsar, ngnss, nobs, &
                                nparticle_slip, nparticle, ndim, &
                                myid, numprocs
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
@@ -646,7 +646,7 @@ contains
                          work_particles, ndim*work_size, mpi_double_precision, &
                          0, mpi_comm_world, ierr)
         call work_eval_init_particles(myid, work_size, nplane, ndim, particle_cur, &
-                                      work_particles, work_likelihood_ls, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, &
+                                      work_particles, work_likelihood_ls, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, &
                                       cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
                                       id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                       slip_dist, obs_points, obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
@@ -738,7 +738,7 @@ contains
                                     work_likelihood_ls_new, nplane, id_start, &
                                     particle_cur, particle_cand, &
                                     st_rand, work_size, ndim, &
-                                    cov, gamma, myid, nxi_ls, neta_ls, nnode, ndof, &
+                                    cov, gamma, myid, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, &
                                     nsar, ngnss, nobs, cny_fault, coor_fault, &
                                     node_to_elem_val, node_to_elem_size, id_dof, &
                                     luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &

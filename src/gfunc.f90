@@ -233,7 +233,7 @@ contains
 
     subroutine calc_greens_func(theta, nplane, nxi_ls, neta_ls, gmat, slip_dist, cny_fault, coor_fault, obs_points, &
                                 obs_unitvec, node_to_elem_val, node_to_elem_size, &
-                                id_dof, nsar, ngnss, nobs, nnode, ndof, target_id_val, &
+                                id_dof, nsar, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                                 node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                                 r1vec, r2vec, nvec, response_dist, uobs, uret)
         implicit none
@@ -246,20 +246,20 @@ contains
         double precision, intent(in) :: theta(:), coor_fault(:, :), obs_points(:, :), &
             obs_unitvec(:, :)
 
-        integer, intent(in) ::  nplane, nxi_ls(:), neta_ls(:), nsar, ngnss, nobs, nnode, ndof
+        integer, intent(in) ::  nplane, nxi_ls(:), neta_ls(:), nsar, ngnss, nobs, nnode_total, ndof_total, ndof_index(:)
         integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j
         integer :: target_id_size, nxi, neta, offset
         double precision :: xf, yf, zf, strike, dip, lxi, leta, strike_rad, dip_rad
         double precision :: pi = 4d0*atan(1d0)
 
         ! initialize gmat
-        do j = 1, 2*ndof
+        do j = 1, 2*ndof_total
             do i = 1, nobs
                 gmat(i, j) = 0d0
             end do
         end do
         ! initialize slip distribution
-        do inode = 1, nnode
+        do inode = 1, nnode_total
             do idirection = 1, 2
                 slip_dist(idirection, inode) = 0d0
             end do
@@ -311,7 +311,8 @@ contains
             ! loop for each degree of freedom of slip
             ! do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &
             !     (nxi - 1)*(neta - 1)*iplane
-            do idof = offset + 1, offset + (nxi + 1)*(neta + 1)              
+            ! do idof = offset + 1, offset + (nxi + 1)*(neta + 1)              
+            do idof = ndof_index(iplane), ndof_index(iplane + 1) - 1
                 inode = id_dof(idof)
                 target_id_size = node_to_elem_size(inode)
                 do itarget = 1, target_id_size
@@ -340,7 +341,7 @@ contains
                     call del_unit_slip(inode, idirection, slip_dist)
                 end do
             end do
-            offset = offset + (nxi + 1) * (neta + 1)
+            ! offset = offset + (nxi + 1) * (neta + 1)
         end do
     end subroutine
 end module gfunc

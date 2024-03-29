@@ -106,11 +106,24 @@ contains
                     do k = 1, 4
                         node_to_elem_val(k, node_id) = -1
                     end do
-                    ! ! no degree of freedom on the edge of the fault
+                    ! no degree of freedom on the edge of the fault
                     ! if (i == 1 .or. i == nxi + 1 .or. &
                     !     j == 1 .or. j == neta + 1) then
                     !     cycle
                     ! end if
+                    if (iplane == 1) then
+                        if (i == 1 .or. j == 1) then
+                            cycle
+                        end if
+                    else if (iplane == nplane) then
+                        if (i == nxi + 1 .or. j == 1) then
+                            cycle
+                        end if
+                    else
+                        if (j == 1) then
+                            cycle
+                        end if
+                    end if
                     id_dof(cnt) = node_id
                     cnt = cnt + 1
                 end do
@@ -146,16 +159,16 @@ contains
         end do
     end subroutine discretize_fault
 
-    subroutine gen_laplacian(theta, nplane, nnode, nxi_ls, neta_ls, id_dof, ndof, luni, lmat)
+    subroutine gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, id_dof, ndof_total, luni, lmat)
         implicit none
-        integer, intent(in) :: nplane, nnode, nxi_ls(:), neta_ls(:), id_dof(:), ndof
+        integer, intent(in) :: nplane, nnode_total, nxi_ls(:), neta_ls(:), id_dof(:), ndof_total
         double precision, intent(in) :: theta(:)
         double precision, intent(inout) ::  luni(:, :), lmat(:, :)
         double precision :: dxi, deta, lxi, leta
         integer :: iplane, inode, idof, jnode, nxi, neta, offset
         ! laplacian for single component
-        do jnode = 1, nnode
-            do inode = 1, nnode
+        do jnode = 1, nnode_total
+            do inode = 1, nnode_total
                 luni(inode, jnode) = 0d0
             end do
         end do
@@ -199,14 +212,14 @@ contains
         end do
 
         ! laplacian for two components(u_xi, u_eta)
-        do jnode = 1, 2*ndof
-            do inode = 1, 2*nnode
+        do jnode = 1, 2*ndof_total
+            do inode = 1, 2*nnode_total
                 lmat(inode, jnode) = 0d0
             end do
         end do
 
-        do inode = 1, nnode
-            do idof = 1, ndof
+        do inode = 1, nnode_total
+            do idof = 1, ndof_total
                 jnode = id_dof(idof)
                 lmat(2*(inode - 1) + 1, 2*(idof - 1) + 1) = luni(inode, jnode)
                 lmat(2*(inode - 1) + 2, 2*(idof - 1) + 2) = luni(inode, jnode)
@@ -215,9 +228,9 @@ contains
     end subroutine
 
     subroutine gen_sparse_lmat(lmat, lmat_index, lmat_val, ltmat_index, &
-                               ltmat_val, nnode, ndof)
+                               ltmat_val, nnode_total, ndof_total)
         implicit none
-        integer, intent(in) :: nnode, ndof
+        integer, intent(in) :: nnode_total, ndof_total
         double precision, intent(in) :: lmat(:, :)
         integer, intent(inout) :: lmat_index(:, :), ltmat_index(:, :)
         double precision, intent(inout) :: lmat_val(:, :), ltmat_val(:, :)
@@ -225,9 +238,9 @@ contains
         double precision :: val
 
         ! sparse matrix of L
-        do i = 1, 2*nnode
+        do i = 1, 2*nnode_total
             cnt = 0
-            do j = 1, 2*ndof
+            do j = 1, 2*ndof_total
                 val = lmat(i, j)
                 if (abs(val) > 1d-8) then
                     cnt = cnt + 1
@@ -243,9 +256,9 @@ contains
         end do
 
         ! sparse matrix of L^T
-        do i = 1, 2*ndof
+        do i = 1, 2*ndof_total
             cnt = 0
-            do j = 1, 2*nnode
+            do j = 1, 2*nnode_total
                 val = lmat(j, i)
                 if (abs(val) > 1d-8) then
                     cnt = cnt + 1
@@ -261,15 +274,15 @@ contains
         end do
     end subroutine gen_sparse_lmat
 
-    subroutine calc_ll(llmat, lmat, nnode, ndof)
+    subroutine calc_ll(llmat, lmat, nnode_total, ndof_total)
         implicit none
-        integer, intent(in) :: nnode, ndof
+        integer, intent(in) :: nnode_total, ndof_total
         double precision, intent(in) :: lmat(:, :)
         double precision, intent(inout) :: llmat(:, :)
         double precision, allocatable :: tmp(:)
         integer :: n, m, i, j
-        n = 2*nnode
-        m = 2*ndof
+        n = 2*nnode_total
+        m = 2*ndof_total
         allocate (tmp(m))
         do j = 1, m
             do i = 1, m
