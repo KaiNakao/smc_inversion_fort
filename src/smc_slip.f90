@@ -88,7 +88,7 @@ contains
         end do
         do i = 1, n
             tmp = 0d0
-            do j = 1, 5
+            do j = 1, 9
                 tmp = tmp + lmat_val(j, i)*svec(lmat_index(j, i))
             end do
             lsvec(i) = tmp
@@ -141,7 +141,7 @@ contains
 
         do inode = 1, 2*nnode
             tmp = 0d0
-            do j = 1, 5
+            do j = 1, 9
                 tmp = tmp + lmat_val(j, inode)*svec(lmat_index(j, inode))
             end do
             lsvec(inode) = tmp/alpha2_full(inode)
@@ -149,7 +149,7 @@ contains
 
         do idof = 1, 2*ndof
             tmp = 0d0
-            do j = 1, 5
+            do j = 1, 9
                 tmp = tmp + ltmat_val(j, idof)*lsvec(ltmat_index(j, idof))
             end do
             grad2(idof) = tmp
