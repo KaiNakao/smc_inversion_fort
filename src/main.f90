@@ -333,39 +333,40 @@ program main
         tmp(i) = 0d0
     end do
     ! open (10, file="../work_noto_obs/from_fugaku/192000_delbc.csv", status='old')
-    ! ! open (10, file="output_obs_delbc/128.csv", status='old')
-    ! do i = 1, nparticle_fault
-    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    !     read (10, *) tmp
-    !     do j = 1, ndim_fault
-    !         particle(j) = particle(j) + tmp(j)
-    !     end do
-    ! end do
-    ! close (10)
-    ! tmp = particle
-    ! do j = 1, ndim_fault
-    !     particle(j) = particle(j)/nparticle_fault
-    ! end do
-    ! open (10, file="mean_fault.dat", status="replace")
-    ! do i = 1, ndim_fault
-    !     write (10, *) particle(i)
-    ! end do
-    ! close (10)
+    open (10, file="output_obs_delbc/23.csv", status='old')
+    do i = 1, nparticle_fault
+        ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+        !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+        read (10, *) tmp
+        do j = 1, ndim_fault
+            particle(j) = particle(j) + tmp(j)
+        end do
+    end do
+    close (10)
+    tmp = particle
+    do j = 1, ndim_fault
+        particle(j) = particle(j)/nparticle_fault
+    end do
+    open (10, file="mean_fault.dat", status="replace")
+    do i = 1, ndim_fault
+        write (10, *) particle(i)
+    end do
+    close (10)
 
     ! ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
     ! ! ! ! !       status="old")
     ! open (10, file="data/theta.dat", status="old")
-    open (10, file="mean_fault.dat", status="old")
-    do i = 1, ndim_fault
-        read (10, *) particle(i)
-    end do
-    close (10)
+    ! open (10, file="mean_fault.dat", status="old")
+    ! do i = 1, ndim_fault
+    !     read (10, *) particle(i)
+    ! end do
+    ! close (10)
     print *, particle
 
     ! particle(8) = -5d0
     ! particle(16) = -5d0
     ! particle(24) = -5d0
+    particle(26) = 4d0
     st_time = omp_get_wtime()
     print *, "start"
     neglog = fault_calc_likelihood( &
@@ -431,7 +432,7 @@ program main
 
     ! call fault_smc_exec( &
     !     output_dir, range, nplane, nparticle_fault, ndim_fault, &
-    !     myid, numprocs, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !     myid, numprocs, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, cny_fault, &
     !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
     !     lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
     !     obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -442,7 +443,7 @@ program main
     !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
     !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
     !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
-    call mpi_finalize(ierr)
+    ! call mpi_finalize(ierr)
 
 contains
     subroutine calc_slip_map(fault_filepath)

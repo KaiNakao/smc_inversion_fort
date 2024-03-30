@@ -466,36 +466,48 @@ contains
         double precision, intent(inout) :: cov(:, :), cov_diag(:)
         integer :: iparticle, idim, jdim, ierr
         double precision weight, di, dj
-        do jdim = 1, ndim
-            do idim = jdim, ndim
-                cov(idim, jdim) = 0d0
-            end do
-        end do
+!         do jdim = 1, ndim
+!             do idim = jdim, ndim
+!                 cov(idim, jdim) = 0d0
+!             end do
+!         end do
 
-!$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
-!$omp reduction(+:cov)
+! !$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
+! !$omp reduction(+:cov)
+!         do iparticle = 1, nparticle
+!             weight = weights(iparticle)
+!             do jdim = 1, ndim
+!                 dj = (particles(jdim, iparticle) - mean(jdim))
+!                 do idim = jdim, ndim
+!                     di = (particles(idim, iparticle) - mean(idim))
+!                     cov(idim, jdim) = cov(idim, jdim) + weight*di*dj
+!                 end do
+!             end do
+!         end do
+! !$omp end parallel do
+!         do idim = 1, ndim
+!             cov_diag(idim) = cov(idim, idim)
+!         end do
+!         do jdim = 1, ndim
+!             do idim = jdim, ndim
+!                 cov(idim, jdim) = cov(idim, jdim)*0.04d0
+!             end do
+!         end do
+
+!         ! LAPACK function for LU decomposition of matrix
+!         call dpotrf('L', ndim, cov, ndim, ierr)
+
+        cov_diag = 0d0
+!$omp parallel do private(iparticle, weight, idim, di) &
+!$omp reduction(+:cov_diag)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
-            do jdim = 1, ndim
-                dj = (particles(jdim, iparticle) - mean(jdim))
-                do idim = jdim, ndim
-                    di = (particles(idim, iparticle) - mean(idim))
-                    cov(idim, jdim) = cov(idim, jdim) + weight*di*dj
-                end do
+            do idim = 1, ndim
+                di = particles(idim, iparticle) - mean(idim)
+                cov_diag(idim) = cov_diag(idim) + weight*di*di
             end do
         end do
 !$omp end parallel do
-        do idim = 1, ndim
-            cov_diag(idim) = cov(idim, idim)
-        end do
-        do jdim = 1, ndim
-            do idim = jdim, ndim
-                cov(idim, jdim) = cov(idim, jdim)*0.04d0
-            end do
-        end do
-
-        ! LAPACK function for LU decomposition of matrix
-        call dpotrf('L', ndim, cov, ndim, ierr)
 
         do idim = 1, ndim
             if (abs(cov_diag(idim)) < 1d-3) then
@@ -503,17 +515,6 @@ contains
             end if
         end do
 
-!         cov_diag = 0d0
-! !$omp parallel do private(iparticle, weight, idim, di) &
-! !$omp reduction(+:cov_diag)
-!         do iparticle = 1, nparticle
-!             weight = weights(iparticle)
-!             do idim = 1, ndim
-!                 di = particles(idim, iparticle) - mean(idim)
-!                 cov_diag(idim) = cov_diag(idim) + weight*di*di
-!             end do
-!         end do
-! !$omp end parallel do
         return
     end subroutine slip_calc_cov_particles
 
@@ -1265,10 +1266,10 @@ contains
     subroutine slip_calc_gsd_gsg(gmat, sigma2_full, dvec, gsdvec, gsgmat, &
                                  nobs, ndof)
         implicit none
+        integer, intent(in) :: nobs, ndof
         double precision, intent(in) :: gmat(:, :), sigma2_full(:), dvec(:)
         double precision, intent(inout) :: gsdvec(:), gsgmat(:, :)
         double precision :: gtsmat(2*ndof, nobs), sdvec(nobs)
-        integer, intent(in) :: nobs, ndof
         integer :: idim, iobs
         double precision :: st_time, en_time
 
