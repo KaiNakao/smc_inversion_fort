@@ -73,7 +73,7 @@ contains
                                   node_to_elem_val(:, :), &
                                   node_to_elem_size(:), &
                                   id_dof(:)
-        integer :: i, j, k, cnt, node_id, patch_id, iplane
+        integer :: i, j, k, l, cnt, node_id, patch_id, iplane, inode
         integer :: offset_node, offset_patch
         integer :: nxi, neta
         integer :: node1, node2, node3, node4
@@ -157,6 +157,19 @@ contains
             offset_patch = offset_patch + nxi * neta
             offset_node = offset_node + (nxi + 1) * (neta + 1)
         end do
+
+        ! offset_node = 0
+        ! do iplane = 1, nplane
+        !     nxi = nxi_ls(iplane)
+        !     neta = neta_ls(iplane)
+        !     do inode = offset_node + 1, offset_node + (nxi + 1) * (neta + 1)
+        !         k = mod((inode - 1 - offset_node), (nxi + 1)) + 1
+        !         l = (inode - 1 - offset_node) / (nxi + 1) + 1
+        !         print *, coor(1, inode), coor(2, inode), k, l
+        !     end do
+        !     offset_node = offset_node + (nxi + 1) * (neta + 1)
+        ! end do
+        ! stop
     end subroutine discretize_fault
 
     subroutine gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, id_dof, ndof_total, luni, lmat)
@@ -164,8 +177,8 @@ contains
         integer, intent(in) :: nplane, nnode_total, nxi_ls(:), neta_ls(:), id_dof(:), ndof_total
         double precision, intent(in) :: theta(:)
         double precision, intent(inout) ::  luni(:, :), lmat(:, :)
-        double precision :: dxi, deta, lxi, leta
-        integer :: iplane, inode, idof, jnode, nxi, neta, offset
+        double precision :: dxi, deta, lxi, leta, dcross
+        integer :: iplane, inode, idof, jnode, nxi, neta, offset, k, l
         ! laplacian for single component
         do jnode = 1, nnode_total
             do inode = 1, nnode_total
@@ -181,32 +194,137 @@ contains
             leta = theta(iplane*8 - 1)
             dxi = lxi/nxi
             deta = leta/neta
+            dcross = sqrt(dxi**2 + deta**2)
             ! do inode = &
             !     1 + (nxi + 1)*(neta + 1)*(iplane - 1), (nxi + 1)*(neta + 1)*iplane
             do inode = offset + 1, offset + (nxi + 1) * (neta + 1)
-                if (mod(inode - 1 - offset, nxi + 1) == 0) then
-                    luni(inode, inode + 1) = luni(inode, inode + 1) + 2d0/dxi**2d0
-                    luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
-                else if (mod(inode - 1 - offset, nxi + 1) == nxi) then
-                    luni(inode, inode - 1) = luni(inode, inode - 1) + 2d0/dxi**2d0
-                    luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
-                else
-                    luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2d0
-                    luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2d0
-                    luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
+                k = mod((inode - 1 - offset), (nxi + 1)) + 1
+                l = (inode - 1 - offset) / (nxi + 1) + 1
+
+                luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2
+                if (k == nxi + 1) then
+                    luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2
+                else 
+                    luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2
                 end if
 
-                if (mod((inode - 1 - offset)/(nxi + 1), neta + 1) == 0) then
-                    luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 2d0/deta**2d0
-                    luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
-                else if (mod((inode - 1 - offset)/(nxi + 1), neta + 1) == neta) then
-                    luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 2d0/deta**2d0
-                    luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
-                else
-                    luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2d0
-                    luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2d0
-                    luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
+                if (k == 1) then
+                    luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2
+                else 
+                    luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2
                 end if
+
+                if (l == neta + 1) then
+                    luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2
+                else 
+                    luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2
+                end if
+
+                if (l == 1) then
+                    luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2
+                else 
+                    luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2
+                end if
+
+                if (k == nxi + 1 .and. l == neta + 1) then
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                else if (k == nxi + 1) then
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                else if (l == neta + 1) then
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                else
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                end if
+
+                if (k == 1 .and. l == neta + 1) then
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                else if (k == 1) then
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                else if (l == neta + 1) then
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                else
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                end if
+
+                if (k == 1 .and. l == 1) then
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                else if (k == 1) then
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                else if (l == 1) then
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                else
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                end if
+                if (k == nxi + 1 .and. l == 1) then
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                else if (k == nxi + 1) then
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                else if (l == 1) then
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                else
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                end if
+                ! if (k == 1) then
+                !     luni(inode, inode + 1) = luni(inode, inode + 1) + 2d0/dxi**2
+                ! else if (k == nxi + 1) then
+                !     luni(inode, inode - 1) = luni(inode, inode - 1) + 2d0/dxi**2
+                ! else
+                !     luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2
+                !     luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2
+                ! end if
+
+                ! luni(inode, inode) = luni(inode, inode) - 2d0/deta**2
+                ! if (l == 1) then
+                !     luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 2d0/deta**2
+                ! else if (l == neta + 1) then
+                !     luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 2d0/deta**2
+                ! else
+                !     luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2
+                !     luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2
+                ! end if
+
+                ! luni(inode, inode) = luni(inode, inode) - 2d0/dcross**2
+                ! if ((k == 1 .and. l < neta + 1) .or. (k < nxi + 1 .and. l == 1)) then
+                !     luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 2d0/dcross**2
+                ! else if ((k == nxi + 1 .and. l > 1) .or. (k > 1 .and. l == neta + 1)) then
+                !     luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 2d0/dcross**2
+                ! else if (k > 1 .and. k < nxi + 1 .and. l > 1 .and. l < neta + 1) then
+                !     luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 1d0/dcross**2
+                !     luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/dcross**2
+                ! end if
+
+                ! luni(inode, inode) = luni(inode, inode) - 2d0/dcross**2
+                ! if ((k == 1 .and. l > 1) .or. (k < nxi + 1 .and. l == neta + 1)) then
+                !     luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 2d0/dcross**2
+                ! else if ((k == nxi + 1 .and. l < neta + 1) .or. (k > 1 .and. l == 1)) then
+                !     luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 2d0/dcross**2
+                ! else if (k > 1 .and. k < nxi + 1 .and. l > 1 .and. l < neta + 1) then
+                !     luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/dcross**2
+                !     luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 1d0/dcross**2
+                ! end if
+                ! if (mod(inode - 1 - offset, nxi + 1) == 0) then
+                !     luni(inode, inode + 1) = luni(inode, inode + 1) + 2d0/dxi**2d0
+                !     luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
+                ! else if (mod(inode - 1 - offset, nxi + 1) == nxi) then
+                !     luni(inode, inode - 1) = luni(inode, inode - 1) + 2d0/dxi**2d0
+                !     luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
+                ! else
+                !     luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2d0
+                !     luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2d0
+                !     luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2d0
+                ! end if
+
+                ! if (mod((inode - 1 - offset)/(nxi + 1), neta + 1) == 0) then
+                !     luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 2d0/deta**2d0
+                !     luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
+                ! else if (mod((inode - 1 - offset)/(nxi + 1), neta + 1) == neta) then
+                !     luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 2d0/deta**2d0
+                !     luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
+                ! else
+                !     luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2d0
+                !     luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2d0
+                !     luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
+                ! end if
             end do
             offset = offset + (nxi + 1) * (neta + 1)
         end do
@@ -248,7 +366,7 @@ contains
                     lmat_val(cnt, i) = val
                 end if
             end do
-            do while (cnt < 5)
+            do while (cnt < 9)
                 cnt = cnt + 1
                 lmat_index(cnt, i) = 1
                 lmat_val(cnt, i) = 0d0
@@ -266,7 +384,7 @@ contains
                     ltmat_val(cnt, i) = val
                 end if
             end do
-            do while (cnt < 5)
+            do while (cnt < 9)
                 cnt = cnt + 1
                 ltmat_index(cnt, i) = 1
                 ltmat_val(cnt, i) = 0d0
