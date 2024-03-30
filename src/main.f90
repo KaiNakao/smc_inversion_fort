@@ -15,8 +15,9 @@ program main
     integer, allocatable :: nxi_ls(:), neta_ls(:)
     ! dimension of  parameter
     integer :: ndim_fault, ndim_slip
-    ! number of patches, nodes, dof
-    integer :: npatch, nnode, ndof
+    ! number of patches, nodes, dof (per fault plane)
+    integer, allocatable :: npatch_ls(:), nnode_ls(:), ndof_ls(:), ndof_index(:)
+    integer :: npatch_total, nnode_total, ndof_total
 
     ! constrain max value for slip
     double precision :: max_slip
@@ -97,6 +98,10 @@ program main
         read (17, *) nplane
         allocate(nxi_ls(nplane))
         allocate(neta_ls(nplane))
+        allocate(npatch_ls(nplane))
+        allocate(nnode_ls(nplane))
+        allocate(ndof_ls(nplane))
+        allocate(ndof_index(nplane + 1))
         read (17, *)
         read (17, *) ! number of samples for fault
         read (17, *) nparticle_fault
@@ -132,6 +137,10 @@ program main
     if (myid /= 0) then
         allocate(nxi_ls(nplane))
         allocate(neta_ls(nplane))
+        allocate(npatch_ls(nplane))
+        allocate(nnode_ls(nplane))
+        allocate(ndof_ls(nplane))
+        allocate(ndof_index(nplane + 1))
     end if
     call mpi_bcast(nxi_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(neta_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
@@ -152,19 +161,32 @@ program main
     end if
 
     ! number of patches, nodes, dof
-    npatch = 0
-    nnode = 0
+    npatch_ls = 0
+    npatch_total = 0
+    nnode_ls = 0
+    nnode_total = 0
+    ndof_ls = 0
+    ndof_total = 0
+    ndof_index(1) = 1
     do iplane = 1, nplane
         nxi = nxi_ls(iplane)
         neta = neta_ls(iplane)
-        npatch = npatch + nxi*neta
-        nnode = nnode + (nxi + 1)*(neta + 1)
+        npatch_ls(iplane) = nxi * neta
+        nnode_ls(iplane) = (nxi + 1) * (neta + 1)
+        if (iplane == 1 .or. iplane == nplane) then
+            ndof_ls(iplane) = nnode_ls(iplane) - (nxi + neta + 1)
+        else
+            ndof_ls(iplane) = nnode_ls(iplane) - (nxi + 1)
+        end if
+        npatch_total = npatch_total + npatch_ls(iplane)
+        nnode_total = nnode_total + nnode_ls(iplane)
+        ndof_total = ndof_total + ndof_ls(iplane)
+        ndof_index(iplane + 1) = ndof_index(iplane) + ndof_ls(iplane)
     end do
-    ndof = nnode
 
     ! dimension of fault parameter
     ndim_fault = 2 + 8*nplane
-    ndim_slip = 2*ndof
+    ndim_slip = 2 * ndof_total
 
     ! read observation data
     ! synthetic test
@@ -203,25 +225,25 @@ program main
                    0, mpi_comm_world, ierr)
 
     ! fault geometry
-    allocate (cny_fault(4, npatch))
-    allocate (coor_fault(2, nnode))
-    allocate (node_to_elem_val(4, nnode))
-    allocate (node_to_elem_size(nnode))
-    allocate (id_dof(ndof))
+    allocate (cny_fault(4, npatch_total))
+    allocate (coor_fault(2, nnode_total))
+    allocate (node_to_elem_val(4, nnode_total))
+    allocate (node_to_elem_size(nnode_total))
+    allocate (id_dof(ndof_total))
 
     ! greens function
     allocate (gmat(nobs, ndim_slip))
-    allocate (slip_dist(2, nnode))
+    allocate (slip_dist(2, nnode_total))
     allocate (response_dist(3, nobs))
 
     ! laplacian
-    allocate (luni(nnode, nnode))
-    allocate (lmat(2*nnode, 2*ndof))
-    allocate (lmat_index(5, 2*nnode))
-    allocate (lmat_val(5, 2*nnode))
-    allocate (ltmat_index(5, 2*ndof))
-    allocate (ltmat_val(5, 2*ndof))
-    allocate (llmat(2*ndof, 2*ndof))
+    allocate (luni(nnode_total, nnode_total))
+    allocate (lmat(2*nnode_total, 2*ndof_total))
+    allocate (lmat_index(9, 2*nnode_total))
+    allocate (lmat_val(9, 2*nnode_total))
+    allocate (ltmat_index(9, 2*ndof_total))
+    allocate (ltmat_val(9, 2*ndof_total))
+    allocate (llmat(2*ndof_total, 2*ndof_total))
 
     ! SMC for slip
     allocate (slip_particles(ndim_slip, nparticle_slip))
@@ -239,15 +261,15 @@ program main
     allocate (slip_st_rand_ls(ndim_slip, nparticle_slip))
     allocate (slip_metropolis_ls(nparticle_slip))
     allocate (sigma2_full(nobs))
-    allocate (alpha2_full(2*nnode))
+    allocate (alpha2_full(2*nnode_total))
     allocate (gsvec(nobs))
-    allocate (lsvec(2*nnode))
+    allocate (lsvec(2*nnode_total))
     allocate (slip_particle_cur(ndim_slip))
     allocate (slip_particle_cand(ndim_slip))
 
     ! ! calculate diplacement for fixed fault and slip distribution
-    ! allocate (slip(2, nnode))
-    ! allocate (svec(2*ndof))
+    ! allocate (slip(2, nnode_total))
+    ! allocate (svec(2*ndof_total))
 
     ! allocate (particle(ndim_fault))
     ! open (10, file="mean_fault.dat", status='old')
@@ -264,10 +286,10 @@ program main
     !                       node_to_elem_val, node_to_elem_size, id_dof)
     ! open (10, file="mean_slip.dat", &
     !       status='old')
-    ! do i = 1, nnode
+    ! do i = 1, nnode_total
     !     read (10, *) slip(1, i), slip(2, i)
     ! end do
-    ! do i = 1, ndof
+    ! do i = 1, ndof_total
     !     svec(2*i - 1) = slip(1, id_dof(i))
     !     svec(2*i) = slip(2, id_dof(i))
     ! end do
@@ -276,11 +298,11 @@ program main
 
     ! call calc_greens_func(particle, nplane, nxi_ls, neta_ls, gmat, slip_dist, cny_fault, coor_fault, obs_points, &
     !                       obs_unitvec, node_to_elem_val, node_to_elem_size, &
-    !                       id_dof, nsar, ngnss, nobs, nnode, ndof, target_id_val, &
+    !                       id_dof, nsar, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
     !                       node_id_in_patch, xinode, etanode, uxinode, uetanode, &
     !                       r1vec, r2vec, nvec, response_dist, uobs, uret)
 
-    ! call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
+    ! call dgemv('n', nobs, 2*ndof_total, 1d0, gmat, &
     !            nobs, svec, 1, 0d0, gsvec, 1)
     ! open (10, file="dvec_est.dat", &
     !       status='replace')
@@ -302,52 +324,53 @@ program main
     ! print *, "variance reduction: ", 1d0 - dtmp1/dtmp2
 
     ! ! calculate likelihood for given fault
-    ! allocate (particle(ndim_fault))
-    ! allocate (tmp(ndim_fault + 1))
-    ! do i = 1, ndim_fault
-    !     particle(i) = 0d0
-    ! end do
-    ! do i = 1, ndim_fault + 1
-    !     tmp(i) = 0d0
-    ! end do
+    allocate (particle(ndim_fault))
+    allocate (tmp(ndim_fault + 1))
+    do i = 1, ndim_fault
+        particle(i) = 0d0
+    end do
+    do i = 1, ndim_fault + 1
+        tmp(i) = 0d0
+    end do
     ! open (10, file="../work_noto_obs/from_fugaku/192000_delbc.csv", status='old')
-    ! ! open (10, file="output_obs_delbc/128.csv", status='old')
-    ! do i = 1, nparticle_fault
-    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    !     read (10, *) tmp
-    !     do j = 1, ndim_fault
-    !         particle(j) = particle(j) + tmp(j)
-    !     end do
-    ! end do
-    ! close (10)
-    ! tmp = particle
-    ! do j = 1, ndim_fault
-    !     particle(j) = particle(j)/nparticle_fault
-    ! end do
-    ! open (10, file="mean_fault.dat", status="replace")
-    ! do i = 1, ndim_fault
-    !     write (10, *) particle(i)
-    ! end do
-    ! close (10)
+    open (10, file="output_obs_delbc/23.csv", status='old')
+    do i = 1, nparticle_fault
+        ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+        !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+        read (10, *) tmp
+        do j = 1, ndim_fault
+            particle(j) = particle(j) + tmp(j)
+        end do
+    end do
+    close (10)
+    tmp = particle
+    do j = 1, ndim_fault
+        particle(j) = particle(j)/nparticle_fault
+    end do
+    open (10, file="mean_fault.dat", status="replace")
+    do i = 1, ndim_fault
+        write (10, *) particle(i)
+    end do
+    close (10)
 
     ! ! ! ! ! open (10, file="/hoe/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
     ! ! ! ! !       status="old")
-    open (10, file="data/theta.dat", status="old")
+    ! open (10, file="data/theta.dat", status="old")
     ! open (10, file="mean_fault.dat", status="old")
-    do i = 1, ndim_fault
-        read (10, *) particle(i)
-    end do
-    close (10)
+    ! do i = 1, ndim_fault
+    !     read (10, *) particle(i)
+    ! end do
+    ! close (10)
     print *, particle
 
     ! particle(8) = -5d0
     ! particle(16) = -5d0
     ! particle(24) = -5d0
+    particle(26) = 4d0
     st_time = omp_get_wtime()
     print *, "start"
     neglog = fault_calc_likelihood( &
-             particle, nplane, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+             particle, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, cny_fault, &
              coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
              lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
              obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -409,7 +432,7 @@ program main
 
     ! call fault_smc_exec( &
     !     output_dir, range, nplane, nparticle_fault, ndim_fault, &
-    !     myid, numprocs, nxi_ls, neta_ls, nnode, ndof, nsar, ngnss, nobs, cny_fault, &
+    !     myid, numprocs, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, nsar, ngnss, nobs, cny_fault, &
     !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
     !     lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
     !     obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -420,7 +443,7 @@ program main
     !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
     !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
     !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls)
-    call mpi_finalize(ierr)
+    ! call mpi_finalize(ierr)
 
 contains
     subroutine calc_slip_map(fault_filepath)
@@ -436,7 +459,7 @@ contains
         stride = 100
 
         slip_filepath = "output/mapslip.dat"
-        allocate (slip(2, nnode))
+        allocate (slip(2, nnode_total))
         allocate (particle_slip(ndim_slip))
         if (myid == 0) then
             allocate (fault_particles(ndim_fault, nparticle_fault))
@@ -470,7 +493,7 @@ contains
                 particle(j) = work_fault_particles(j, i)
             end do
 
-            neglog = fault_calc_likelihood(particle, nplane, nxi_ls, neta_ls, nnode, ndof, &
+            neglog = fault_calc_likelihood(particle, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, &
                                            nsar, ngnss, nobs, cny_fault, coor_fault, node_to_elem_val, &
                                            node_to_elem_size, id_dof, luni, lmat, lmat_index, lmat_val, &
                                            ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
@@ -506,7 +529,7 @@ contains
         if (myid == 0) then
             open (17, file=slip_filepath, status='replace')
             do iparticle = 1, nparticle_fault
-                do inode = 1, nnode
+                do inode = 1, nnode_total
                     do idirection = 1, 2
                         slip(idirection, inode) = 0d0
                     end do
@@ -514,12 +537,12 @@ contains
                 do idim = 1, ndim_slip
                     particle_slip(idim) = mean_slip(idim, iparticle)
                 end do
-                do idof = 1, ndof
+                do idof = 1, ndof_total
                     inode = id_dof(idof)
                     slip(1, inode) = particle_slip(2*(idof - 1) + 1)
                     slip(2, inode) = particle_slip(2*(idof - 1) + 2)
                 end do
-                do inode = 1, nnode
+                do inode = 1, nnode_total
                     do idirection = 1, 2
                         write (17, "(f12.5)", advance="no") slip(idirection, inode)
                     end do
@@ -557,8 +580,8 @@ contains
         points_filepath = "output/points.dat"
         allocate (fault_particles(ndim_fault, nparticle_fault))
         ! x, y, z, uxi, ueta, unorm
-        allocate (points(6, nparticle_fault*npatch*nr**2))
-        allocate (mean_slip(2*nnode, nparticle_fault))
+        allocate (points(6, nparticle_fault*npatch_total*nr**2))
+        allocate (mean_slip(2*nnode_total, nparticle_fault))
         allocate (tmp(ndim_fault + 1))
         allocate (particle(ndim_fault))
         allocate (svec(ndim_slip))
@@ -579,7 +602,7 @@ contains
         cnt = 1
         do iparticle = 1, nparticle_fault
             print *, "iparticle: ", iparticle
-            slip_dist = reshape(mean_slip(:, iparticle), (/2, nnode/))
+            slip_dist = reshape(mean_slip(:, iparticle), (/2, nnode_total/))
             do idim = 1, ndim_fault
                 particle(idim) = fault_particles(idim, iparticle)
             end do
@@ -639,7 +662,7 @@ contains
                             y = yf + eta*cos(dip_rad)*sin(strike_rad) + &
                                 xi*cos(strike_rad)
                             z = zf + eta*sin(dip_rad)
-                            idpoint = (cnt - 1)*npatch*4 + (ie - 1)*4 + (ir1 - 1)*2 + ir2
+                            idpoint = (cnt - 1)*npatch_total*4 + (ie - 1)*4 + (ir1 - 1)*2 + ir2
                             points(1, idpoint) = x
                             points(2, idpoint) = y
                             points(3, idpoint) = z
@@ -654,7 +677,7 @@ contains
         end do
 
         open (10, file=points_filepath, status='replace')
-        do i = 1, nparticle_fault*npatch*nr**2
+        do i = 1, nparticle_fault*npatch_total*nr**2
             do j = 1, 6
                 write (10, "(f12.5)", advance="no") points(j, i)
             end do
