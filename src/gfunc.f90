@@ -176,6 +176,10 @@ contains
                     !                 dip_pass, area/4., strike, uret)
                     call call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
                                     dip, area/4d0, strike, uret)
+                    ! if (zsource > 0d0) then
+                    !     print *, "zsource is positive:", zsource
+                    !     print *, "uret: ", uret
+                    ! end if
                     !   add contribution from the point source
                     do idim = 1, 3
                         uobs(idim) = uobs(idim) + uret(idim)

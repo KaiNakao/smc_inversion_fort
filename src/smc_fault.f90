@@ -6,15 +6,17 @@ module smc_fault
     use omp_lib
     implicit none
 contains
-    subroutine fault_sample_init_particles(particles, nparticle, ndim, range)
+    subroutine fault_sample_init_particles(particles, nparticle, ndim, range, nplane)
         implicit none
 
         double precision, intent(inout) :: particles(:, :)
-        integer, intent(in) :: nparticle, ndim
+        integer, intent(in) :: nparticle, ndim, nplane
         double precision, intent(in) :: range(:, :)
-        integer :: idim, iparticle
+        integer :: idim, iparticle, iplane
         double precision ::  x, xmin, xmax, randr
-        double precision :: tmp
+        double precision :: tmp, zmax, zf, strike, lxi, pi, dip, leta, zmin
+
+        pi = 2d0*asin(1d0)
         do iparticle = 1, nparticle
             do idim = 1, ndim
                 xmin = range(1, idim)
@@ -22,6 +24,19 @@ contains
                 call random_number_correction(randr)
                 x = xmin + randr*(xmax - xmin)
                 particles(idim, iparticle) = x
+            end do
+            ! top of the fault plane must be underground
+            do iplane = 1, nplane
+                dip = particles(8*iplane - 3, iparticle)
+                dip = dip * pi / 180d0
+                leta = particles(8*iplane - 1, iparticle)
+                zf = particles(8*iplane - 5, iparticle)
+                zmax = min(range(2, 8*iplane - 5), -leta/2d0*sin(dip))
+                zmin = range(1, 8*iplane - 5)
+                if (zf > zmax) then
+                    zf = max(2d0*zmax - zf, zmin)
+                    particles(8*iplane - 5, iparticle) = zf
+                end if
             end do
         end do
     end subroutine fault_sample_init_particles
@@ -462,10 +477,11 @@ contains
             slip_prior_ls(:), slip_weights(:), slip_mean(:), slip_cov(:, :), slip_likelihood_ls_new(:), &
             slip_prior_ls_new(:), slip_st_rand_ls(:, :), slip_metropolis_ls(:), gsvec(:), lsvec(:), &
             slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:)
-        integer :: iparticle, jparticle, idim, jdim, nassigned, istart
-        double precision :: likelihood_cur, likelihood_cand, metropolis
+        integer :: iparticle, jparticle, idim, jdim, nassigned, istart, iplane
+        double precision :: likelihood_cur, likelihood_cand, metropolis, dip, pi, leta, zf, zmax, zmin
         double precision :: v1, v2
 
+        pi = 2d0*asin(1d0)
         work_acc_count = 0
         do iparticle = 1, work_size
             nassigned = work_assigned_num(iparticle)
@@ -501,11 +517,24 @@ contains
                 do idim = 1, ndim
                     if (range(2, idim) - range(1, idim) > 1d-3) then
                         if (particle_cand(idim) < range(1, idim)) then
-                            particle_cand(idim) = min(2*range(1, idim) - particle_cand(idim), range(2, idim))
+                            particle_cand(idim) = min(2d0*range(1, idim) - particle_cand(idim), range(2, idim))
                         end if
                         if (particle_cand(idim) > range(2, idim)) then
-                            particle_cand(idim) = max(2*range(2, idim) - particle_cand(idim), range(1, idim))
+                            particle_cand(idim) = max(2d0*range(2, idim) - particle_cand(idim), range(1, idim))
                         end if
+                    end if
+                end do
+                ! top of the fault plane must be underground
+                do iplane = 1, nplane
+                    dip = particle_cand(8*iplane - 3)
+                    dip = dip * pi / 180d0
+                    leta = particle_cand(8*iplane - 1)
+                    zf = particle_cand(8*iplane - 5)
+                    zmax = min(range(2, 8*iplane - 5), -leta/2d0*sin(dip))
+                    zmin = range(1, 8*iplane - 5)
+                    if (zf > zmax) then
+                        zf = max(2d0*zmax - zf, zmin)
+                        particle_cand(8*iplane - 5) = zf
                     end if
                 end do
                 ! calculate negative log likelihood of the proposed configuration
@@ -640,7 +669,7 @@ contains
         iter = 0
         if (myid == 0) then
             ! sampling from the prior distribution
-            call fault_sample_init_particles(particles, nparticle, ndim, range)
+            call fault_sample_init_particles(particles, nparticle, ndim, range, nplane)
         end if
         call mpi_scatter(particles, ndim*work_size, mpi_double_precision, &
                          work_particles, ndim*work_size, mpi_double_precision, &

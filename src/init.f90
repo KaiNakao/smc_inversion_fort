@@ -255,6 +255,7 @@ contains
                 else
                     luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
                 end if
+
                 if (k == nxi + 1 .and. l == 1) then
                     luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
                 else if (k == nxi + 1) then

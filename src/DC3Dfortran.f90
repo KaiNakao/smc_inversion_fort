@@ -64,6 +64,10 @@ XX=X
 YY=Y
 ZZ=Z
 DD=DEPTH+Z
+if (depth < 0d0) then
+       ! print *, "depth: ", depth, " is negative"
+       return
+end if
 if(dabs(XX)<EPS) XX=0.0d0
 if(dabs(YY)<EPS) YY=0.0d0
 if(dabs(DD)<EPS) DD=0.0d0
