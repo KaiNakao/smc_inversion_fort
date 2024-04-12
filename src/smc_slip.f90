@@ -209,8 +209,13 @@ contains
                 x = mu_i + v1*sqrt(sigma2_i)
                 fx = cdf_norm(x, mu_i, sigma2_i)
                 f1 = cdf_norm(max_slip, mu_i, sigma2_i)
-                f0 = cdf_norm(0d0, mu_i, sigma2_i)
-
+                if (mod(idim, 2) == 0) then
+                    ! dip slip
+                    f0 = cdf_norm(0d0, mu_i, sigma2_i)
+                else
+                    ! strike slip
+                    f0 = cdf_norm(-max_slip, mu_i, sigma2_i)
+                end if
                 ! solve F(y) = (F(1) - F(0)) F(x) + F(0) by Newton's method
                 ! where F(:) is CDF of normal distribution
                 y_i = mu_i
@@ -711,20 +716,38 @@ contains
                 ham_cand = 1d20
                 return
             end if
-            ! ! reflection
-            do while (particle_cand(idim) < 0d0 .or. &
-                      particle_cand(idim) > max_slip)
-                if (particle_cand(idim) > max_slip) then
-                    particle_cand(idim) = &
-                        2*max_slip - particle_cand(idim)
-                    pvec(idim) = -pvec(idim)
-                end if
-                if (particle_cand(idim) < 0d0) then
-                    particle_cand(idim) = &
-                        -particle_cand(idim)
-                    pvec(idim) = -pvec(idim)
-                end if
-            end do
+            ! reflection
+            if (mod(idim, 2) == 0) then
+                ! dip slip
+                do while (particle_cand(idim) < 0d0 .or. &
+                        particle_cand(idim) > max_slip)
+                    if (particle_cand(idim) > max_slip) then
+                        particle_cand(idim) = &
+                            2d0*max_slip - particle_cand(idim)
+                        pvec(idim) = -pvec(idim)
+                    end if
+                    if (particle_cand(idim) < 0d0) then
+                        particle_cand(idim) = &
+                            -particle_cand(idim)
+                        pvec(idim) = -pvec(idim)
+                    end if
+                end do
+            else
+                ! strike slip
+                do while (particle_cand(idim) < -max_slip .or. &
+                        particle_cand(idim) > max_slip)
+                    if (particle_cand(idim) > max_slip) then
+                        particle_cand(idim) = &
+                            2d0*max_slip - particle_cand(idim)
+                        pvec(idim) = -pvec(idim)
+                    end if
+                    if (particle_cand(idim) < -max_slip) then
+                        particle_cand(idim) = &
+                            -2d0*max_slip -particle_cand(idim)
+                        pvec(idim) = -pvec(idim)
+                    end if
+                end do
+            end if
             ! if (ieee_is_nan(particle_cand(idim))) then
             !     print *, "particle_cand is nan"
             !     print *, "pvec: ", pvec
@@ -781,20 +804,38 @@ contains
                     ham_cand = 1d20
                     return
                 end if
-                ! ! reflection
-                do while (particle_cand(idim) < 0d0 .or. &
-                          particle_cand(idim) > max_slip)
-                    if (particle_cand(idim) > max_slip) then
-                        particle_cand(idim) = &
-                            2*max_slip - particle_cand(idim)
-                        pvec(idim) = -pvec(idim)
-                    end if
-                    if (particle_cand(idim) < 0d0) then
-                        particle_cand(idim) = &
-                            -particle_cand(idim)
-                        pvec(idim) = -pvec(idim)
-                    end if
-                end do
+                ! reflection
+                if (mod(idim, 2) == 0) then
+                    ! dip slip
+                    do while (particle_cand(idim) < 0d0 .or. &
+                            particle_cand(idim) > max_slip)
+                        if (particle_cand(idim) > max_slip) then
+                            particle_cand(idim) = &
+                                2d0*max_slip - particle_cand(idim)
+                            pvec(idim) = -pvec(idim)
+                        end if
+                        if (particle_cand(idim) < 0d0) then
+                            particle_cand(idim) = &
+                                -particle_cand(idim)
+                            pvec(idim) = -pvec(idim)
+                        end if
+                    end do
+                else
+                    ! strike slip
+                    do while (particle_cand(idim) < -max_slip .or. &
+                            particle_cand(idim) > max_slip)
+                        if (particle_cand(idim) > max_slip) then
+                            particle_cand(idim) = &
+                                2d0*max_slip - particle_cand(idim)
+                            pvec(idim) = -pvec(idim)
+                        end if
+                        if (particle_cand(idim) < -max_slip) then
+                            particle_cand(idim) = &
+                                -2d0*max_slip -particle_cand(idim)
+                            pvec(idim) = -pvec(idim)
+                        end if
+                    end do
+                end if
                 ! if (ieee_is_nan(particle_cand(idim))) then
                 !     print *, "particle_cand is nan"
                 !     print *, "pvec: ", pvec
