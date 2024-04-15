@@ -1,4 +1,5 @@
 module init
+    use type_mat
     implicit none
 contains
     subroutine read_observation1(observation_path, &
@@ -23,26 +24,26 @@ contains
     subroutine read_observation2(observation_path, nobs, &
                                  obs_points, &
                                  obs_unitvec, obs_sigma, &
-                                 dvec, nsar, ngnss)
+                                 dvec, nsar_ls, nsar_index, nsar_total, ngnss, npath)
         implicit none
         character(*), intent(in) :: observation_path
-        integer, intent(in) :: nobs
+        integer, intent(in) :: nobs, npath
         double precision, intent(inout) :: obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), dvec(:)
-        integer, intent(inout) :: nsar, ngnss
+        integer, intent(inout) :: nsar_ls(:), nsar_index(:), nsar_total, ngnss
 
-        integer iobs
+        integer iobs, ipath
         double precision :: x, y, ex, ey, ez, dlos, sigma
-        character(10) :: type
+        character(20) :: type, type_prev
         character(200) :: buf
         open (10, file=observation_path)
         read (10, *) buf
-        nsar = 0
+
+        nsar_total = 0
         ngnss = 0
-        ! for (iobs = 0 iobs < nobs iobs++) {
+        ipath = 1
+        nsar_ls(ipath) = 0
         do iobs = 1, nobs
-            !     fscanf(fp, "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%s\n", &x, &y, &ex, &ey, &ez,
-            !            &dlos, &sigma, type)
             read (10, *) x, y, ex, ey, ez, dlos, sigma, type
             obs_points(1, iobs) = x
             obs_points(2, iobs) = y
@@ -51,17 +52,71 @@ contains
             obs_unitvec(3, iobs) = ez
             dvec(iobs) = dlos
             obs_sigma(iobs) = sigma
-            if (type == "sar") then
-                nsar = nsar + 1
+            if (iobs == 1) then
+                type_prev = type
             end if
-            if (type == "gnss") then
+            if (type(1:5) == "InSAR") then
+                if (type == type_prev) then
+                    nsar_ls(ipath) = nsar_ls(ipath) + 1
+                else
+                    ipath = ipath + 1
+                    nsar_ls(ipath) = 1
+                end if
+                type_prev = type
+            end if
+            if (type == "GNSS") then
                 ngnss = ngnss + 1
             end if
         end do
+        nsar_total = 0
+        nsar_index(1) = 1
+        do ipath = 1, npath
+            nsar_total = nsar_total + nsar_ls(ipath)
+            nsar_index(ipath + 1) = nsar_index(ipath) + nsar_ls(ipath)
+        end do 
         ! GNSS observation have 3 direction components
         ngnss = ngnss/3
         close (10)
     end subroutine read_observation2
+
+    subroutine calc_sigma_sar_mat(npath, nsar_ls, nsar_index, &
+                                  obs_points, obs_sigma, sigma_sar_mat)
+        implicit none
+        integer, intent(in) :: npath, nsar_ls(:), nsar_index(:)
+        double precision, intent(in) :: obs_points(:,:), obs_sigma(:)
+        type(mat), intent(inout) :: sigma_sar_mat(:)
+        integer :: ipath, iobs, jobs, nobs, iobs_start, lwork, info
+        integer, allocatable :: ipiv(:)
+        double precision, allocatable :: work(:)
+        double precision :: xi, yi, xj, yj, dist
+
+        do ipath = 1, npath
+            nobs = nsar_ls(ipath)
+            iobs_start = nsar_index(ipath)
+            lwork = nobs
+            allocate(ipiv(nobs))
+            allocate(work(lwork))
+            do iobs = 1, nobs
+                xi = obs_points(1, iobs_start - 1 + iobs)
+                yi = obs_points(2, iobs_start - 1 + iobs)
+                do jobs = 1, nsar_ls(ipath)
+                    xj = obs_points(1, iobs_start - 1 + jobs)
+                    yj = obs_points(2, iobs_start - 1 + jobs)
+                    dist = sqrt((xi - xj)**2 + (yi - yj)**2)
+                    sigma_sar_mat(ipath)%body(iobs, jobs) = &
+                        obs_sigma(nsar_index(ipath) + iobs) * &
+                        obs_sigma(nsar_index(ipath) + jobs) * &
+                        exp(-dist/1d1)
+                end do
+            end do
+            call dgetrf(nobs, nobs, sigma_sar_mat(ipath)%body, &
+                        nobs, ipiv, info)
+            call dgetri(nobs, sigma_sar_mat(ipath)%body, &
+                        nobs, ipiv, work, lwork, info)
+            deallocate(ipiv)
+            deallocate(work)
+        end do
+    end subroutine calc_sigma_sar_mat
 
     subroutine discretize_fault(theta, nplane, nxi_ls, neta_ls, cny, coor, &
                                 node_to_elem_val, node_to_elem_size, id_dof)

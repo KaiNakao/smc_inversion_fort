@@ -1,4 +1,5 @@
 module gfunc
+    use type_mat
     implicit none
 contains
     subroutine gen_unit_slip(inode, idirection, slip_dist)
@@ -191,9 +192,9 @@ contains
 
     subroutine calc_responce_dist(obs_points, cny_fault, coor_fault, slip_dist, &
                                   xf, yf, zf, strike, dip, target_id_val, &
-                                  target_id_size, nsar, ngnss, node_id_in_patch, &
+                                  target_id_size, ngnss, node_id_in_patch, &
                                   xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
-                                  nvec, response_dist, uobs, uret)
+                                  nvec, response_dist, uobs, uret, nsar_total)
         implicit none
         double precision, intent(in) :: obs_points(:, :), coor_fault(:, :), slip_dist(:, :)
         double precision, intent(in) :: xf, yf, zf, strike, dip
@@ -201,11 +202,11 @@ contains
             uetanode(:), r1vec(:), r2vec(:), nvec(:), response_dist(:, :), uobs(:), uret(:)
         integer, intent(in) :: cny_fault(:, :), target_id_val(:)
         integer, intent(inout) ::  node_id_in_patch(:)
-        integer, intent(in) :: nsar, ngnss, target_id_size
+        integer, intent(in) :: ngnss, target_id_size, nsar_total
         integer ::  iobs, idim
         double precision :: xobs, yobs
         ! for SAR observation points
-        do iobs = 1, nsar
+        do iobs = 1, nsar_total
             xobs = obs_points(1, iobs)
             yobs = obs_points(2, iobs)
             ! calculate displacement(ux, uy, uz) at single obsevation point
@@ -219,8 +220,8 @@ contains
         end do
         ! for GNSS observation points
         do iobs = 1, ngnss
-            xobs = obs_points(1, nsar + 1 + 3*(iobs - 1))
-            yobs = obs_points(2, nsar + 1 + 3*(iobs - 1))
+            xobs = obs_points(1, nsar_total + 1 + 3*(iobs - 1))
+            yobs = obs_points(2, nsar_total + 1 + 3*(iobs - 1))
             ! calculate displacement (ux, uy, uz) at single obsevation point
             call calc_responce(cny_fault, coor_fault, slip_dist, xobs, yobs, xf, &
                                yf, zf, strike, dip, target_id_val, target_id_size, &
@@ -228,30 +229,34 @@ contains
                                r1vec, r2vec, nvec, uobs, uret)
             ! copy for three components
             do idim = 1, 3
-                response_dist(idim, nsar + 3*(iobs - 1) + 1) = uobs(idim)
-                response_dist(idim, nsar + 3*(iobs - 1) + 2) = uobs(idim)
-                response_dist(idim, nsar + 3*(iobs - 1) + 3) = uobs(idim)
+                response_dist(idim, nsar_total + 3*(iobs - 1) + 1) = uobs(idim)
+                response_dist(idim, nsar_total + 3*(iobs - 1) + 2) = uobs(idim)
+                response_dist(idim, nsar_total + 3*(iobs - 1) + 3) = uobs(idim)
             end do
         end do
     end subroutine calc_responce_dist
 
     subroutine calc_greens_func(theta, nplane, nxi_ls, neta_ls, gmat, slip_dist, cny_fault, coor_fault, obs_points, &
                                 obs_unitvec, node_to_elem_val, node_to_elem_size, &
-                                id_dof, nsar, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
+                                id_dof, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                                 node_id_in_patch, xinode, etanode, uxinode, uetanode, &
-                                r1vec, r2vec, nvec, response_dist, uobs, uret)
+                                r1vec, r2vec, nvec, response_dist, uobs, uret, nsar_total, npath, &
+                                nsar_index, gmat_arr)
         implicit none
         double precision, intent(inout) :: gmat(:, :), slip_dist(:, :), &
             xinode(:), etanode(:), uxinode(:), uetanode(:), &
             r1vec(:), r2vec(:), nvec(:), response_dist(:, :), uobs(:), uret(:)
         integer, intent(inout) :: target_id_val(:), node_id_in_patch(:)
         integer, intent(in) :: cny_fault(:, :), node_to_elem_val(:, :), &
-                               node_to_elem_size(:), id_dof(:)
+                               node_to_elem_size(:), id_dof(:), nsar_total
         double precision, intent(in) :: theta(:), coor_fault(:, :), obs_points(:, :), &
             obs_unitvec(:, :)
 
-        integer, intent(in) ::  nplane, nxi_ls(:), neta_ls(:), nsar, ngnss, nobs, nnode_total, ndof_total, ndof_index(:)
-        integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j
+        integer, intent(in) ::  nplane, nxi_ls(:), neta_ls(:), ngnss, nobs, &
+                                nnode_total, ndof_total, ndof_index(:), npath, &
+                                nsar_index(:)
+        type(mat), intent(inout) :: gmat_arr(:)
+        integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j, ipath, k
         integer :: target_id_size, nxi, neta, offset
         double precision :: xf, yf, zf, strike, dip, lxi, leta, strike_rad, dip_rad
         double precision :: pi = 4d0*atan(1d0)
@@ -329,9 +334,9 @@ contains
                     ! observation points
                     call calc_responce_dist(obs_points, cny_fault, coor_fault, slip_dist, &
                                             xf, yf, zf, strike, dip, target_id_val, &
-                                            target_id_size, nsar, ngnss, node_id_in_patch, &
+                                            target_id_size, ngnss, node_id_in_patch, &
                                             xinode, etanode, uxinode, uetanode, r1vec, r2vec, &
-                                            nvec, response_dist, uobs, uret)
+                                            nvec, response_dist, uobs, uret, nsar_total)
 
                     ! inner product (displacement * LOS unitvec)
                     do iobs = 1, nobs
@@ -346,6 +351,22 @@ contains
                 end do
             end do
             ! offset = offset + (nxi + 1) * (neta + 1)
+        end do
+
+        do ipath = 1, npath
+            k = nsar_index(ipath)
+            do iobs = nsar_index(ipath), nsar_index(ipath + 1) - 1
+                do idim = 1, 2*ndof_total
+                    gmat_arr(ipath)%body(iobs - k + 1, idim) = gmat(iobs, idim)
+                end do
+            end do
+            ! print *, "ipath: ", ipath
+            ! do iobs = nsar_index(ipath), nsar_index(ipath + 1) - 1
+            !     do idim = 1, 2*ndof_total
+            !         write(*, "(e15.5)", advance="no") gmat_arr(ipath)%body(iobs - nsar_index(ipath) + 1, idim)
+            !     end do
+            !     write(*, *)
+            ! end do
         end do
     end subroutine
 end module gfunc
