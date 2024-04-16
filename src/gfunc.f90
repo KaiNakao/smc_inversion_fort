@@ -117,10 +117,14 @@ contains
         M_PI = 2d0*asin(1d0)
         dip_rad = dip/180d0*M_PI
         strike_rad = strike/180d0*M_PI
-        r1vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
-        r1vec(2) = 0.5d0 ! 1d0/sqrt(3d0)
-        r2vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
-        r2vec(2) = 0.5d0 ! 1d0/sqrt(3d0)
+        ! r1vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
+        ! r1vec(2) = 0.5d0 ! 1d0/sqrt(3d0)
+        ! r2vec(1) = -0.5d0 ! -1d0/sqrt(3d0)
+        ! r2vec(2) = 0.5d0 ! 1d0/sqrt(3d0)
+        r1vec(1) = -1d0/sqrt(3d0)
+        r1vec(2) = 1d0/sqrt(3d0)
+        r2vec(1) = -1d0/sqrt(3d0)
+        r2vec(2) = 1d0/sqrt(3d0)
         ! initialize
         do idim = 1, 3
             uobs(idim) = 0d0

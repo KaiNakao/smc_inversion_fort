@@ -75,7 +75,6 @@ contains
                                 - 2d0*dot_product(gsdvec, svec) &
                                 + dsd)/2d0 &
                                 + nsar_total*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
-
         ! do i = 1, nobs
         !     gsvec(i) = 0d0
         ! end do
@@ -125,7 +124,6 @@ contains
         do i = 1, n
             slip_calc_prior = slip_calc_prior + lsvec(i)**2d0/(2d0*alpha2_full(i))
         end do
-
     end function slip_calc_prior
 
     subroutine slip_calc_grad(grad, svec, gmat, lmat_index, lmat_val, &
@@ -143,15 +141,6 @@ contains
         integer :: inode, iobs, idof, idim, j
 
         grad = 0d0
-
-        ! grad1 = 0d0
-        ! call dgemv('n', nobs, 2*ndof, 1d0, gmat, &
-        !            nobs, svec, 1, 0d0, gsvec, 1)
-        ! do iobs = 1, nobs
-        !     tmp_vec(iobs) = (dvec(iobs) - gsvec(iobs))/sigma2_full(iobs)
-        ! end do
-        ! call dgemv('t', nobs, 2*ndof, -gamma, gmat, &
-        !            nobs, tmp_vec, 1, 0d0, grad1, 1)
 
         grad1 = 0d0
         call dgemv('n', ndim, ndim, 1d0, gsgmat, ndim, &
@@ -241,6 +230,8 @@ contains
                     ! strike slip
                     f0 = cdf_norm(-max_slip, mu_i, sigma2_i)
                 end if
+                ! f1 = cdf_norm(1d5, mu_i, sigma2_i)
+                ! f0 = cdf_norm(-1d5, mu_i, sigma2_i)
                 ! solve F(y) = (F(1) - F(0)) F(x) + F(0) by Newton's method
                 ! where F(:) is CDF of normal distribution
                 y_i = mu_i
@@ -254,8 +245,6 @@ contains
                     y_prev = y_i
                     cnt = cnt + 1
                 end do
-                ! y_i = min(y_i, max_slip)
-                ! y_i = max(y_i, 0d0)
                 particle_cur(idim) = y_i
             end do
             do idim = 1, ndim
@@ -325,6 +314,7 @@ contains
 !$omp end parallel do
 
         cv_threshold = 2d0
+        ! cv_threshold = 0.5d0
         ! binary search for the next gamma
         ! such that c.o.v of the weight is equivalent to cv_threashold
         lower = gamma_prev
@@ -598,7 +588,6 @@ contains
             likelihood_ls_new(:), prior_ls_new(:), &
             st_rand_ls(:, :), metropolis_ls(:), particle_cur(:), &
             particle_cand(:), st_rand(:), gsvec(:), lsvec(:)
-
         integer, intent(inout) :: id_start(:)
         integer :: iparticle, jparticle, idim, nassigned, istart, ierr
         double precision ::likelihood_cur, likelihood_cand, &
@@ -792,7 +781,7 @@ contains
         end do
         do itau = 1, ntau
             call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-                                ltmat_index, ltmat_val, dvec, 5d-1, &
+                                ltmat_index, ltmat_val, dvec, gamma, &
                                 gsvec, lsvec, sigma2_full, alpha2_full, &
                                 nobs, ndof, nnode, ndim, gsdvec, gsgmat)
             
@@ -888,22 +877,6 @@ contains
             !     stop
             ! end if
         end do
-        ! do idim = 1, ndim
-        !     !   non negative constraints
-        !     if (particle_cand(idim) < 0d0) then
-        !         particle_cand(idim) = min(-particle_cand(idim), max_slip)
-        !         ! particle_cand = particle_cur
-        !         ! ham_cand = 1d20
-        !         ! return
-        !     end if
-        !     !   max slip constraints
-        !     if (particle_cand(idim) > max_slip) then
-        !         particle_cand(idim) = max(2*max_slip - particle_cand(idim), 0d0)
-        !         ! particle_cand = particle_cur
-        !         ! ham_cand = 1d20
-        !         ! return
-        !     end if
-        ! end do
         ! final hamiltonian
         likelihood_cand = slip_calc_likelihood( &
                           particle_cand, dvec, sigma2_full, gmat, &
@@ -947,8 +920,6 @@ contains
             st_rand_ls(:, :), metropolis_ls(:), particle_cur(:), &
             particle_cand(:), st_rand(:), gsvec(:), lsvec(:), dtau_ls(:), &
             log_dtau_upper, log_dtau_lower
-        
-
         integer, intent(inout) :: id_start(:), ntau_ls(:), ntau_upper, ntau_lower
         integer :: iparticle, jparticle, kparticle, idim, nassigned, istart, ierr
         double precision ::likelihood_cur, likelihood_cand, &
@@ -1064,20 +1035,20 @@ contains
                 end do
                 ! score = score/ntau*exp(min(0d0, dham))
                 score = score*exp(min(0d0, dham))
-                if (ieee_is_nan(score)) then
-                    print *, "score is nan"
-                    print *, "particle_cand: ", particle_cand
-                    print *, "particle_cur: ", particle_cur
-                    print *, "pvec:", pvec
-                    print *, "cov_diag: ", cov_diag
-                    print *, "ham_cand: ", ham_cand
-                    print *, "ham_cur: ", ham_cur
-                    print *, "likelihood_cand: ", likelihood_cand
-                    print *, "likelihood_cur: ", likelihood_cur
-                    print *, "prior_cand: ", prior_cand
-                    print *, "prior_cur: ", prior_cur
-                    stop
-                end if
+                ! if (ieee_is_nan(score)) then
+                !     print *, "score is nan"
+                !     print *, "particle_cand: ", particle_cand
+                !     print *, "particle_cur: ", particle_cur
+                !     print *, "pvec:", pvec
+                !     print *, "cov_diag: ", cov_diag
+                !     print *, "ham_cand: ", ham_cand
+                !     print *, "ham_cur: ", ham_cur
+                !     print *, "likelihood_cand: ", likelihood_cand
+                !     print *, "likelihood_cur: ", likelihood_cur
+                !     print *, "prior_cand: ", prior_cand
+                !     print *, "prior_cur: ", prior_cur
+                !     stop
+                ! end if
                 score_ls(jparticle) = score
 
                 !  metropolis test
@@ -1354,68 +1325,6 @@ contains
         integer :: idim, jdim, iobs, jobs, n, ipath, info
         double precision :: st_time, en_time, dtmp
     
-        ! open(10, file="tmp1/sigma1", status="replace")
-        ! do iobs = 1, sigma_sar_mat(1)%nrow
-        !     do jobs = 1, sigma_sar_mat(1)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(1)%body(iobs, jobs)/sigma_sar2
-        !     end do
-        !     write(10, *)
-        ! end do
-        ! close(10)
-
-        ! open(10, file="tmp1/sigma2", status="replace")
-        ! do iobs = 1, sigma_sar_mat(2)%nrow
-        !     do jobs = 1, sigma_sar_mat(2)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(2)%body(iobs, jobs)/sigma_sar2
-        !     end do
-        !     write(10, *)
-        ! end do
-        ! close(10)
-
-        ! open(10, file="tmp1/sigma3", status="replace")
-        ! do iobs = 1, sigma_sar_mat(3)%nrow
-        !     do jobs = 1, sigma_sar_mat(3)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(3)%body(iobs, jobs)/sigma_sar2
-        !     end do
-        !     write(10, *)
-        ! end do
-        ! close(10)
-
-        ! open(10, file="tmp1/sigma4", status="replace")
-        ! do iobs = 1, sigma_sar_mat(4)%nrow
-        !     do jobs = 1, sigma_sar_mat(4)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(4)%body(iobs, jobs)/sigma_sar2
-        !     end do
-        !     write(10, *)
-        ! end do
-        ! close(10)
-
-        ! open(10, file="tmp1/sigmagnss", status="replace")
-        ! do iobs = nsar_index(npath + 1),  nobs
-        !     do jobs = nsar_index(npath + 1),  nobs
-        !         if (iobs == jobs) then
-        !             write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2*sigma_gnss2)
-        !         else 
-        !             write(10, "(e20.10)", advance="no") 0d0
-        !         end if
-        !     end do
-        !     write(10, *)
-        ! end do
-        ! close(10)
-
-        ! open(10, file="tmp1/gmat", status="replace")
-        ! do iobs = 1, nobs
-        !     do idim = 1, 2*ndof
-        !         write(10, "(e20.10)", advance="no") gmat(iobs, idim)
-        !     end do
-        !     write(10, *)
-        ! end do
-
-        ! open(10, file="tmp1/dvec", status="replace")
-        ! do iobs = 1, nobs
-        !     write(10, "(e20.10)", advance="no") dvec(iobs)
-        ! end do
-        ! print *, "sigma_sar2: ", sigma_sar2
 
         ! sd
         sdvec = 0d0

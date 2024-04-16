@@ -83,8 +83,9 @@ contains
                                   node_id_in_patch(:), slip_assigned_num(:), &
                                   slip_id_start(:)
         type(mat), intent(inout) :: gmat_arr(:)
-        integer :: i, j, ierr, nxi, neta, inode, iplane, offset
+        integer :: i, j, ierr, nxi, neta, inode, iplane, offset, iobs, jobs, idim, idof, jnode
         double precision :: log_sigma_sar2, log_sigma_gnss2, log_alpha2, neglog_sum
+        double precision :: sigma_sar2, sigma_gnss2
         double precision :: st_time, en_time
 
         st_time = omp_get_wtime()
@@ -117,6 +118,8 @@ contains
         ! (variance matrix for likelihood function of slip)
         log_sigma_sar2 = theta(8*nplane + 1)
         log_sigma_gnss2 = theta(8*nplane + 2)
+        sigma_sar2 = exp(log_sigma_sar2)
+        sigma_gnss2 = exp(log_sigma_gnss2)
         do i = 1, nsar_total
             sigma2_full(i) = obs_sigma(i)**2d0*exp(log_sigma_sar2)
         end do
@@ -140,6 +143,100 @@ contains
             end do
             offset = offset + (nxi + 1) * (neta + 1)
         end do
+
+        ! open(10, file="tmp/sigma1", status="replace")
+        ! do iobs = 1, sigma_sar_mat(1)%nrow
+        !     do jobs = 1, sigma_sar_mat(1)%nrow
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(1)%body(iobs, jobs)/sigma_sar2
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/sigma2", status="replace")
+        ! do iobs = 1, sigma_sar_mat(2)%nrow
+        !     do jobs = 1, sigma_sar_mat(2)%nrow
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(2)%body(iobs, jobs)/sigma_sar2
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/sigma3", status="replace")
+        ! do iobs = 1, sigma_sar_mat(3)%nrow
+        !     do jobs = 1, sigma_sar_mat(3)%nrow
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(3)%body(iobs, jobs)/sigma_sar2
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/sigma4", status="replace")
+        ! do iobs = 1, sigma_sar_mat(4)%nrow
+        !     do jobs = 1, sigma_sar_mat(4)%nrow
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(4)%body(iobs, jobs)/sigma_sar2
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/sigmagnss", status="replace")
+        ! do iobs = nsar_index(npath + 1),  nobs
+        !     do jobs = nsar_index(npath + 1),  nobs
+        !         if (iobs == jobs) then
+        !             write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2*sigma_gnss2)
+        !         else 
+        !             write(10, "(e20.10)", advance="no") 0d0
+        !         end if
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/gmat", status="replace")
+        ! do iobs = 1, nobs
+        !     do idim = 1, 2*ndof_total
+        !         write(10, "(e20.10)", advance="no") gmat(iobs, idim)
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/dvec", status="replace")
+        ! do iobs = 1, nobs
+        !     write(10, "(e20.10)", advance="no") dvec(iobs)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/lmat", status="replace")
+        ! do inode = 1, 2*nnode_total
+        !     do idof = 1, 2*ndof_total
+        !         write(10, "(e20.10)", advance="no") lmat(inode, idof)
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp/vmat", status="replace")
+        ! do inode = 1, 2*nnode_total
+        !     do jnode = 1, 2*nnode_total
+        !         if (inode == jnode) then
+        !             write(10, "(e20.10)", advance="no") alpha2_full(inode)
+        !         else 
+        !             write(10, "(e20.10)", advance="no") 0d0
+        !         end if
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+        
+        ! open(10, file="tmp/log_sigma_sar2", status="replace")
+        !     write(10, "(e20.10)", advance="no") log_sigma_sar2
+        ! close(10)
+
+        ! open(10, file="tmp/log_sigma_gnss2", status="replace")
+        !     write(10, "(e20.10)", advance="no") log_sigma_gnss2
+        ! close(10)
 
         st_time = omp_get_wtime()
         ! Sequential Monte Carlo sampling for slip
