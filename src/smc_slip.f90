@@ -47,25 +47,34 @@ contains
                                                    sigma2_full, gmat, &
                                                    log_sigma_sar2, log_sigma_gnss2, &
                                                    ngnss, gsvec, &
-                                                   nobs, ndof, gsgmat_l, &
+                                                   nobs, ndof, gsgmat, &
                                                    gsdvec, dsd, nsar_total)
         implicit none
         double precision, intent(in) :: svec(:), dvec(:), sigma2_full(:), &
-            gmat(:, :), log_sigma_sar2, log_sigma_gnss2, gsgmat_l(:, :), &
+            gmat(:, :), log_sigma_sar2, log_sigma_gnss2, gsgmat(:, :), &
             gsdvec(:), dsd
         integer, intent(in) :: ngnss, nobs, ndof, nsar_total
         double precision, intent(inout) :: gsvec(:)
-        integer :: i
+        integer :: i, j
 
-        double precision :: dmax, stmp(2*ndof)
+        double precision :: dmax, st_time, en_time
 
-        stmp = svec
-        call dtrmv("u", "n", "n", 2*ndof, gsgmat_l, 2*ndof, stmp, 1)
-        slip_calc_likelihood = (dot_product(stmp, stmp) &
-                                - 2*dot_product(gsdvec, svec) &
+        slip_calc_likelihood = 0d0
+        do i = 1, 2*ndof
+            do j = 1, i - 1
+                slip_calc_likelihood = slip_calc_likelihood &
+                                        + svec(i) * gsgmat(j, i) * svec(j)
+            end do
+        end do
+        slip_calc_likelihood = slip_calc_likelihood * 2d0
+        do i = 1, 2*ndof
+            slip_calc_likelihood = slip_calc_likelihood &
+                                   + svec(i) * gsgmat(i, i) * svec(i)
+        end do
+        slip_calc_likelihood = (slip_calc_likelihood &
+                                - 2d0*dot_product(gsdvec, svec) &
                                 + dsd)/2d0 &
-                                + nsar_total*log_sigma_sar2/2d0 &
-                                + 3d0*ngnss*log_sigma_gnss2/2d0
+                                + nsar_total*log_sigma_sar2/2d0 + 3d0*ngnss*log_sigma_gnss2/2d0
 
         ! do i = 1, nobs
         !     gsvec(i) = 0d0
@@ -179,12 +188,12 @@ contains
                                        gmat, log_sigma_sar2, &
                                        log_sigma_gnss2, ngnss, nobs, ndof, &
                                        lmat_index, lmat_val, nnode, particle_cur, gsvec, lsvec, &
-                                       gsgmat_l, gsdvec, dsd, nsar_total)
+                                       gsdvec, dsd, nsar_total, gsgmat)
         implicit none
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), llmat(:, :), gmat(:, :), sigma2_full(:), &
             alpha2_full(:), log_sigma_sar2, log_sigma_gnss2, theta(:), &
-            gsgmat_l(:, :), gsdvec(:), dsd
+            gsdvec(:), dsd, gsgmat(:,:)
         integer, intent(in) :: nnode, ndof, ngnss, nobs, &
                                nparticle, ndim, lmat_index(:, :), nplane, &
                                nsar_total
@@ -264,7 +273,7 @@ contains
             likelihood_ls(iparticle) = &
                 slip_calc_likelihood(particle_cur, dvec, sigma2_full, &
                                      gmat, log_sigma_sar2, log_sigma_gnss2, &
-                                     ngnss, gsvec, nobs, ndof, gsgmat_l, gsdvec, dsd, nsar_total)
+                                     ngnss, gsvec, nobs, ndof, gsgmat, gsdvec, dsd, nsar_total)
             prior_ls(iparticle) = slip_calc_prior(particle_cur, alpha2_full, theta, nplane, &
                                                   lmat_index, lmat_val, lsvec, nnode)
         end do
@@ -347,9 +356,9 @@ contains
             if (abs(gamma - 1d0) < 1d-10) then
                 exit
             end if
-            if (cnt > 1000) then
-                exit
-            end if
+            ! if (cnt > 1000) then
+            !     exit
+            ! end if
             cnt = cnt + 1
         end do
 
@@ -573,14 +582,14 @@ contains
                                  ltmat_index, ltmat_val, &
                                  nnode, max_slip, st_rand_ls, metropolis_ls, &
                                  particle_cur, particle_cand, st_rand, gsvec, lsvec, &
-                                 dtau_ls, ntau_ls, gsdvec, gsgmat, ntau_upper, gsgmat_l, &
+                                 dtau_ls, ntau_ls, gsdvec, gsgmat, ntau_upper,  &
                                  dsd, nsar_total)
         implicit none
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), ltmat_val(:, :), &
             gmat(:, :), sigma2_full(:), alpha2_full(:), theta(:), &
             log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), cov_diag(:), &
-            dtau_ls(:), gsdvec(:), gsgmat(:, :), gsgmat_l(:, :), dsd
+            dtau_ls(:), gsdvec(:), gsgmat(:, :), dsd
         integer, intent(in) :: nnode, ndof, ngnss, nobs, nplane,  &
                                nparticle, ndim, lmat_index(:, :), ltmat_index(:, :), &
                                assigned_num(:), ntau_ls(:), ntau_upper, nsar_total
@@ -667,7 +676,7 @@ contains
                                    likelihood_cand, log_sigma_sar2, log_sigma_gnss2, &
                                    ngnss, prior_cand, theta, nplane, &
                                    post_cand, ham_cand, particle_cur, gsdvec, gsgmat, &
-                                   gsgmat_l, dsd, nsar_total)
+                                   dsd, nsar_total)
                 !  metropolis test
                 metropolis = metropolis_ls(jparticle)
                 if (((ham_cur - ham_cand) > log(metropolis))) then
@@ -712,7 +721,7 @@ contains
                              likelihood_cand, log_sigma_sar2, log_sigma_gnss2, &
                              ngnss, prior_cand, theta, nplane, &
                              post_cand, ham_cand, particle_cur, gsdvec, gsgmat, &
-                             gsgmat_l, dsd, nsar_total)
+                             dsd, nsar_total)
         implicit none
         integer, intent(in) :: ndim, ntau, lmat_index(:, :), ltmat_index(:, :), &
                                nobs, ndof, nnode, ngnss, nplane,  &
@@ -720,8 +729,7 @@ contains
         double precision, intent(in) :: post_cur, cov_diag(:), dtau, &
             gmat(:, :), lmat_val(:, :), ltmat_val(:, :), dvec(:), gamma, &
             sigma2_full(:), alpha2_full(:), max_slip, log_sigma_sar2, &
-            log_sigma_gnss2, theta(:), particle_cur(:), gsdvec(:), gsgmat(:, :), &
-            gsgmat_l(:, :), dsd
+            log_sigma_gnss2, theta(:), particle_cur(:), gsdvec(:), gsgmat(:, :), dsd
         double precision, intent(inout) :: ham_cur, pvec(:), particle_cand(:), grad(:), &
             gsvec(:), lsvec(:), likelihood_cand, prior_cand, post_cand, ham_cand
         integer :: idim, itau
@@ -900,7 +908,7 @@ contains
         likelihood_cand = slip_calc_likelihood( &
                           particle_cand, dvec, sigma2_full, gmat, &
                           log_sigma_sar2, log_sigma_gnss2, ngnss, &
-                          gsvec, nobs, ndof, gsgmat_l, gsdvec, dsd, nsar_total)
+                          gsvec, nobs, ndof, gsgmat, gsdvec, dsd, nsar_total)
         prior_cand = slip_calc_prior(particle_cand, alpha2_full, theta, nplane, &
                                      lmat_index, lmat_val, lsvec, nnode)
         post_cand = gamma*likelihood_cand + prior_cand
@@ -922,14 +930,14 @@ contains
                                particle_cur, particle_cand, st_rand, gsvec, lsvec, &
                                log_dtau_upper, log_dtau_lower, ntau_upper, ntau_lower, &
                                dtau_ls, ntau_ls, &
-                               gsdvec, gsgmat, tuning_factor, gsgmat_l, &
+                               gsdvec, gsgmat, tuning_factor, &
                                dsd, nsar_total)
         implicit none
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), ltmat_val(:, :), &
             gmat(:, :), sigma2_full(:), alpha2_full(:), theta(:), &
             log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), cov_diag(:), &
-            gsdvec(:), gsgmat(:, :), gsgmat_l(:, :), dsd
+            gsdvec(:), gsgmat(:, :), dsd
         integer, intent(in) :: nnode, ndof, ngnss, nobs, nplane,  &
                                nparticle, ndim, lmat_index(:, :), ltmat_index(:, :), &
                                assigned_num(:), tuning_factor, nsar_total
@@ -1047,7 +1055,7 @@ contains
                                    likelihood_cand, log_sigma_sar2, log_sigma_gnss2, &
                                    ngnss, prior_cand, theta, nplane, &
                                    post_cand, ham_cand, particle_cur, gsdvec, gsgmat, &
-                                   gsgmat_l, dsd, nsar_total)
+                                   dsd, nsar_total)
                 dham = (ham_cur - ham_cand)
 
                 score = 0d0
@@ -1335,77 +1343,77 @@ contains
                                  nobs, ndof, npath, nsar_index, &
                                  nsar_total, sigma_sar_mat, &
                                  sigma_sar2, sigma_gnss2, &
-                                 obs_sigma, gmat_arr, dsd, gsgmat_l)
+                                 obs_sigma, gmat_arr, dsd)
         implicit none
         integer, intent(in) :: nobs, ndof, npath, nsar_index(:), nsar_total
         type(mat), intent(in) :: sigma_sar_mat(:), gmat_arr(:)
         double precision, intent(in) :: gmat(:, :), dvec(:), &
                                         sigma_sar2, sigma_gnss2, obs_sigma(:)
-        double precision, intent(inout) :: gsdvec(:), gsgmat(:, :), dsd, gsgmat_l(:, :)
+        double precision, intent(inout) :: gsdvec(:), gsgmat(:, :), dsd
         double precision :: gtsmat(2*ndof, nobs), sdvec(nobs)
         integer :: idim, jdim, iobs, jobs, n, ipath, info
         double precision :: st_time, en_time, dtmp
     
-        ! open(10, file="tmp/sigma1", status="replace")
+        ! open(10, file="tmp1/sigma1", status="replace")
         ! do iobs = 1, sigma_sar_mat(1)%nrow
         !     do jobs = 1, sigma_sar_mat(1)%nrow
-        !         write(10, "(e15.5)", advance="no") sigma_sar_mat(1)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(1)%body(iobs, jobs)/sigma_sar2
         !     end do
         !     write(10, *)
         ! end do
         ! close(10)
 
-        ! open(10, file="tmp/sigma2", status="replace")
+        ! open(10, file="tmp1/sigma2", status="replace")
         ! do iobs = 1, sigma_sar_mat(2)%nrow
         !     do jobs = 1, sigma_sar_mat(2)%nrow
-        !         write(10, "(e15.5)", advance="no") sigma_sar_mat(2)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(2)%body(iobs, jobs)/sigma_sar2
         !     end do
         !     write(10, *)
         ! end do
         ! close(10)
 
-        ! open(10, file="tmp/sigma3", status="replace")
+        ! open(10, file="tmp1/sigma3", status="replace")
         ! do iobs = 1, sigma_sar_mat(3)%nrow
         !     do jobs = 1, sigma_sar_mat(3)%nrow
-        !         write(10, "(e15.5)", advance="no") sigma_sar_mat(3)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(3)%body(iobs, jobs)/sigma_sar2
         !     end do
         !     write(10, *)
         ! end do
         ! close(10)
 
-        ! open(10, file="tmp/sigma4", status="replace")
+        ! open(10, file="tmp1/sigma4", status="replace")
         ! do iobs = 1, sigma_sar_mat(4)%nrow
         !     do jobs = 1, sigma_sar_mat(4)%nrow
-        !         write(10, "(e15.5)", advance="no") sigma_sar_mat(4)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(4)%body(iobs, jobs)/sigma_sar2
         !     end do
         !     write(10, *)
         ! end do
         ! close(10)
 
-        ! open(10, file="tmp/sigmagnss", status="replace")
+        ! open(10, file="tmp1/sigmagnss", status="replace")
         ! do iobs = nsar_index(npath + 1),  nobs
         !     do jobs = nsar_index(npath + 1),  nobs
         !         if (iobs == jobs) then
-        !             write(10, "(e15.5)", advance="no") 1d0/(obs_sigma(iobs)**2*sigma_gnss2)
+        !             write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2*sigma_gnss2)
         !         else 
-        !             write(10, "(e15.5)", advance="no") 0d0
+        !             write(10, "(e20.10)", advance="no") 0d0
         !         end if
         !     end do
         !     write(10, *)
         ! end do
         ! close(10)
 
-        ! open(10, file="tmp/gmat", status="replace")
+        ! open(10, file="tmp1/gmat", status="replace")
         ! do iobs = 1, nobs
         !     do idim = 1, 2*ndof
-        !         write(10, "(e15.5)", advance="no") gmat(iobs, idim)
+        !         write(10, "(e20.10)", advance="no") gmat(iobs, idim)
         !     end do
         !     write(10, *)
         ! end do
 
-        ! open(10, file="tmp/dvec", status="replace")
+        ! open(10, file="tmp1/dvec", status="replace")
         ! do iobs = 1, nobs
-        !     write(10, "(e15.5)", advance="no") dvec(iobs)
+        !     write(10, "(e20.10)", advance="no") dvec(iobs)
         ! end do
         ! print *, "sigma_sar2: ", sigma_sar2
 
@@ -1457,9 +1465,39 @@ contains
         ! gsg
         call dgemm('n', 'n', 2*ndof, 2*ndof, nobs, 1d0, gtsmat, &
                    2*ndof, gmat, nobs, 0d0, gsgmat, 2*ndof)
-        ! cholesky
-        gsgmat_l = gsgmat
-        call dpotrf("u", 2*ndof, gsgmat_l, 2*ndof, info)
+
+        ! ! cholesky
+        ! gsgmat_l = gsgmat
+        ! call dpotrf("u", 2*ndof, gsgmat_l, 2*ndof, info)
+
+        ! open(10, file="tmp1/gsgmat", status="replace")
+        ! do idim = 1, 2*ndof
+        !     do jdim = 1, 2*ndof
+        !         write(10, "(e20.10)", advance="no") gsgmat(idim, jdim)
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp1/gsgmat_l", status="replace")
+        ! do idim = 1, 2*ndof
+        !     do jdim = 1, 2*ndof
+        !         write(10, "(e20.10)", advance="no") gsgmat_l(idim, jdim)
+        !     end do
+        !     write(10, *)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp1/gsdvec", status="replace")
+        ! do idim = 1, 2*ndof
+        !     write(10, "(e20.10)", advance="no") gsdvec(idim)
+        ! end do
+        ! close(10)
+
+        ! open(10, file="tmp1/dsd", status="replace")
+        !     write(10, "(e20.10)", advance="no") dsd
+        ! close(10)
+        ! stop
     end subroutine slip_calc_gsd_gsg
 
     subroutine slip_smc_exec(particles, particles_new, &
@@ -1511,8 +1549,7 @@ contains
         double precision :: log_dtau_upper, log_dtau_lower, dtau_ls(nparticle)
         integer :: ntau_upper, ntau_lower, ntau_ls(nparticle)
 
-        double precision :: gsdvec(ndof*2), gsgmat(ndof*2, ndof*2), &
-                            gsgmat_l(ndof*2, ndof*2), dsd
+        double precision :: gsdvec(ndof*2), gsgmat(ndof*2, ndof*2), dsd
         integer :: tuning_factor
         double precision :: metropolis, v1, v2
 
@@ -1527,8 +1564,7 @@ contains
 
         call slip_calc_gsd_gsg(gmat, dvec, gsdvec, gsgmat, nobs, ndof, npath, &
                                nsar_index, nsar_total, sigma_sar_mat, &
-                               sigma_sar2, sigma_gnss2, obs_sigma, gmat_arr, dsd, &
-                               gsgmat_l)
+                               sigma_sar2, sigma_gnss2, obs_sigma, gmat_arr, dsd)
 
         ! sampling from the prior distribution
         call slip_gen_init_particles(particles, likelihood_ls, prior_ls, nparticle, &
@@ -1537,7 +1573,7 @@ contains
                                      gmat, log_sigma_sar2, &
                                      log_sigma_gnss2, ngnss, nobs, ndof, &
                                      lmat_index, lmat_val, nnode, particle_cur, gsvec, lsvec, &
-                                     gsgmat_l, gsdvec, dsd, nsar_total)
+                                     gsdvec, dsd, nsar_total, gsgmat)
         ! ! output result of stage 0(disabled)
         ! write (iter_char, "(i0)") iter
         ! filename = trim(trim(output_dir)//trim(iter_char)//".csv")
@@ -1566,7 +1602,8 @@ contains
             ! find the gamma such that c.o.v of weights = 0.5
             gamma = slip_find_next_gamma(gamma, likelihood_ls, weights, &
                                          neglog_evidence, nparticle)
-            ! print *, "gamma: ", gamma
+            print *, "gamma: ", gamma
+            print *, "evidence: ", neglog_evidence
             neglog_ret = neglog_ret + neglog_evidence
             if (iter > 200) then
                 neglog_ret = 1d10
@@ -1597,7 +1634,7 @@ contains
                                  particle_cur, particle_cand, st_rand, gsvec, lsvec, &
                                  log_dtau_upper, log_dtau_lower, ntau_upper, ntau_lower, &
                                  dtau_ls, ntau_ls, &
-                                 gsdvec, gsgmat, tuning_factor, gsgmat_l, dsd, nsar_total)
+                                 gsdvec, gsgmat, tuning_factor, dsd, nsar_total)
 
             call slip_hmc_sampling(gamma, particles, particles_new, &
                                    likelihood_ls, likelihood_ls_new, prior_ls, &
@@ -1609,7 +1646,7 @@ contains
                                    ltmat_index, ltmat_val, &
                                    nnode, max_slip, st_rand_ls, metropolis_ls, &
                                    particle_cur, particle_cand, st_rand, gsvec, lsvec, &
-                                   dtau_ls, ntau_ls, gsdvec, gsgmat, ntau_upper, gsgmat_l, dsd, nsar_total)
+                                   dtau_ls, ntau_ls, gsdvec, gsgmat, ntau_upper, dsd, nsar_total)
 
             ! call slip_hmc_sampling(gamma, particles, particles_new, &
             !                        likelihood_ls, likelihood_ls_new, prior_ls, &

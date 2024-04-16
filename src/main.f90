@@ -372,33 +372,33 @@ program main
     !     tmp(i) = 0d0
     ! end do
     ! ! open (10, file="from_fugaku/192000.csv", status='old')
-    ! open (10, file="output_cov/58.csv", status='old')
-    ! do i = 1, nparticle_fault
-    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    !     read (10, *) tmp
-    !     do j = 1, ndim_fault
-    !         particle(j) = particle(j) + tmp(j)
-    !     end do
-    ! end do
-    ! close (10)
-    ! tmp = particle
-    ! do j = 1, ndim_fault
-    !     particle(j) = particle(j)/nparticle_fault
-    ! end do
-    ! open (10, file="mean_fault.dat", status="replace")
-    ! do i = 1, ndim_fault
-    !     write (10, *) particle(i)
-    ! end do
-    ! close (10)
-
-    ! ! open (10, file="data/theta.dat", status="old")
-    ! ! ! open (10, file="mean_fault.dat", status="old")
-    ! ! do i = 1, ndim_fault
-    ! !     read (10, *) particle(i)
+    ! ! ! open (10, file="output_cov/58.csv", status='old')
+    ! ! do i = 1, nparticle_fault
+    ! !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+    ! !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+    ! !     read (10, *) tmp
+    ! !     do j = 1, ndim_fault
+    ! !         particle(j) = particle(j) + tmp(j)
+    ! !     end do
     ! ! end do
     ! ! close (10)
-    ! ! print *, particle
+    ! ! tmp = particle
+    ! ! do j = 1, ndim_fault
+    ! !     particle(j) = particle(j)/nparticle_fault
+    ! ! end do
+    ! ! open (10, file="mean_fault.dat", status="replace")
+    ! ! do i = 1, ndim_fault
+    ! !     write (10, *) particle(i)
+    ! ! end do
+    ! ! close (10)
+
+    ! open (10, file="data/theta.dat", status="old")
+    ! ! open (10, file="mean_fault.dat", status="old")
+    ! do i = 1, ndim_fault
+    !     read (10, *) particle(i)
+    ! end do
+    ! close (10)
+    ! print *, particle
 
     ! st_time = omp_get_wtime()
     ! print *, "start"
@@ -415,7 +415,6 @@ program main
     !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
     !          slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat", &
     !          npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
-    ! !  slip_particle_cand, slip_st_rand, 0, "output/slip_from_mean_fault.dat")
     ! en_time = omp_get_wtime()
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
