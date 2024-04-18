@@ -371,8 +371,8 @@ program main
     ! do i = 1, ndim_fault + 1
     !     tmp(i) = 0d0
     ! end do
-    ! ! open (10, file="from_fugaku/192000.csv", status='old')
-    ! open (10, file="output_cov/63.csv", status='old')
+    ! open (10, file="from_fugaku/19200_cov.csv", status='old')
+    ! ! open (10, file="output_cov_all/27.csv", status='old')
     ! do i = 1, nparticle_fault
     !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
     !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
@@ -392,13 +392,13 @@ program main
     ! end do
     ! close (10)
 
-    ! ! open (10, file="data/theta.dat", status="old")
+    ! ! ! open (10, file="data/theta_gsi.dat", status="old")
     ! ! open (10, file="mean_fault.dat", status="old")
     ! ! do i = 1, ndim_fault
     ! !     read (10, *) particle(i)
     ! ! end do
     ! ! close (10)
-    ! print *, particle
+    ! ! print *, particle
 
     ! st_time = omp_get_wtime()
     ! print *, "start"

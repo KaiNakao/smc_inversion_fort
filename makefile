@@ -42,7 +42,7 @@ obj/smc_slip.o: src/smc_slip.f90
 obj/mat.o: src/mat.f90
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 
-obj/smc_fault.o: src/smc_fault.f90 obj/init.o obj/gfunc.o obj/smc_slip.o obj/sort.o
+obj/smc_fault.o: src/smc_fault.f90 obj/init.o obj/gfunc.o obj/smc_slip.o obj/sort.o 
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 	
 obj/main.o: src/main.f90 obj/init.o obj/gfunc.o obj/smc_fault.o 
