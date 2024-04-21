@@ -189,10 +189,17 @@ program main
         neta = neta_ls(iplane)
         npatch_ls(iplane) = nxi * neta
         nnode_ls(iplane) = (nxi + 1) * (neta + 1)
-        if (iplane == 1 .or. iplane == nplane) then
-            ndof_ls(iplane) = nnode_ls(iplane) - (nxi + neta + 1)
-        else
-            ndof_ls(iplane) = nnode_ls(iplane) - (nxi + 1)
+        ! if (iplane == 1 .or. iplane == nplane) then
+        !     ndof_ls(iplane) = nnode_ls(iplane) - (nxi + neta + 1)
+        ! else
+        !     ndof_ls(iplane) = nnode_ls(iplane) - (nxi + 1)
+        ! end if
+        ndof_ls(iplane) = nnode_ls(iplane) - (nxi + 1)
+        if (iplane == 1) then
+            ndof_ls(iplane) = ndof_ls(iplane) - neta
+        end if
+        if (iplane == nplane) then
+            ndof_ls(iplane) = ndof_ls(iplane) - neta
         end if
         npatch_total = npatch_total + npatch_ls(iplane)
         nnode_total = nnode_total + nnode_ls(iplane)
@@ -311,7 +318,8 @@ program main
     ! allocate (svec(2*ndof_total))
 
     ! allocate (particle(ndim_fault))
-    ! open (10, file="mean_fault.dat", status='old')
+    ! ! open (10, file="mean_fault.dat", status='old')
+    ! open (10, file="data/theta.dat", status='old')
     ! ! open (10, file="/home/nakao/smc_inversion_fort/input/noto_synthetic/theta.dat", &
     ! !       status='old')
     ! ! open (10, file="data/theta.dat")
@@ -371,34 +379,34 @@ program main
     ! do i = 1, ndim_fault + 1
     !     tmp(i) = 0d0
     ! end do
-    ! open (10, file="from_fugaku/19200_cov.csv", status='old')
-    ! ! open (10, file="output_cov_all/27.csv", status='old')
-    ! do i = 1, nparticle_fault
-    !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
-    !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
-    !     read (10, *) tmp
-    !     do j = 1, ndim_fault
-    !         particle(j) = particle(j) + tmp(j)
-    !     end do
-    ! end do
-    ! close (10)
-    ! tmp = particle
-    ! do j = 1, ndim_fault
-    !     particle(j) = particle(j)/nparticle_fault
-    ! end do
-    ! open (10, file="mean_fault.dat", status="replace")
-    ! do i = 1, ndim_fault
-    !     write (10, *) particle(i)
-    ! end do
-    ! close (10)
-
-    ! ! ! open (10, file="data/theta_gsi.dat", status="old")
-    ! ! open (10, file="mean_fault.dat", status="old")
-    ! ! do i = 1, ndim_fault
-    ! !     read (10, *) particle(i)
+    ! ! open (10, file="from_fugaku/19200_cov.csv", status='old')
+    ! ! ! open (10, file="output_cov_all/27.csv", status='old')
+    ! ! do i = 1, nparticle_fault
+    ! !     ! read (10, *) tmp(1), tmp(2), tmp(3), tmp(4), tmp(5), &
+    ! !     !     tmp(6), tmp(7), tmp(8), tmp(9), tmp(10), tmp(11)
+    ! !     read (10, *) tmp
+    ! !     do j = 1, ndim_fault
+    ! !         particle(j) = particle(j) + tmp(j)
+    ! !     end do
     ! ! end do
     ! ! close (10)
-    ! ! print *, particle
+    ! ! tmp = particle
+    ! ! do j = 1, ndim_fault
+    ! !     particle(j) = particle(j)/nparticle_fault
+    ! ! end do
+    ! ! open (10, file="mean_fault.dat", status="replace")
+    ! ! do i = 1, ndim_fault
+    ! !     write (10, *) particle(i)
+    ! ! end do
+    ! ! close (10)
+
+    ! open (10, file="data/theta.dat", status="old")
+    ! ! open (10, file="mean_fault.dat", status="old")
+    ! do i = 1, ndim_fault
+    !     read (10, *) particle(i)
+    ! end do
+    ! close (10)
+    ! print *, particle
 
     ! st_time = omp_get_wtime()
     ! print *, "start"

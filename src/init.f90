@@ -162,20 +162,29 @@ contains
                         node_to_elem_val(k, node_id) = -1
                     end do
                     ! no degree of freedom on the edge of the fault
-                    ! if (i == 1 .or. i == nxi + 1 .or. &
-                    !     j == 1 .or. j == neta + 1) then
-                    !     cycle
+                    ! if (iplane == 1) then
+                    !     if (i == 1 .or. j == 1) then
+                    !         cycle
+                    !     end if
+                    ! else if (iplane == nplane) then
+                    !     if (i == nxi + 1 .or. j == 1) then
+                    !         cycle
+                    !     end if
+                    ! else
+                    !     if (j == 1) then
+                    !         cycle
+                    !     end if
                     ! end if
+                    if (j == 1) then
+                        cycle
+                    end if
                     if (iplane == 1) then
-                        if (i == 1 .or. j == 1) then
+                        if (i == 1) then
                             cycle
                         end if
-                    else if (iplane == nplane) then
-                        if (i == nxi + 1 .or. j == 1) then
-                            cycle
-                        end if
-                    else
-                        if (j == 1) then
+                    end if
+                    if (iplane == nplane) then
+                        if (i == nxi + 1) then
                             cycle
                         end if
                     end if
