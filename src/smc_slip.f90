@@ -499,11 +499,14 @@ contains
         double precision, intent(inout) :: cov(:, :), cov_diag(:)
         integer :: iparticle, idim, jdim, ierr
         double precision weight, di, dj
+
 !         do jdim = 1, ndim
 !             do idim = jdim, ndim
 !                 cov(idim, jdim) = 0d0
 !             end do
 !         end do
+
+!         cov_diag = 0d0
 
 ! !$omp parallel do private(iparticle, weight, idim, di, jdim, dj) &
 ! !$omp reduction(+:cov)
@@ -647,7 +650,7 @@ contains
 
             do jparticle = istart, istart + nassigned - 1
                 dtau = dtau_ls(jparticle)
-                ntau = ntau_ls(jparticle)
+                ! ntau = ntau_ls(jparticle)
                 ntau = 50
                 ! if (ntau > ntau_upper) then
                 !     print *, "ntau: ", ntau, " is too large"
@@ -1200,18 +1203,18 @@ contains
                                   likelihood_ls, likelihood_ls_new, prior_ls, &
                                   prior_ls_new, cov, assigned_num, id_start, &
                                   nparticle, ndim, dvec, sigma2_full, alpha2_full, &
-                                  theta, nplane, nxi, neta, &
+                                  theta, nplane, &
                                   gmat, log_sigma_sar2, log_sigma_gnss2, &
                                   ngnss, nobs, ndof, lmat_index, lmat_val, &
                                   nnode, max_slip, st_rand_ls, metropolis_ls, &
                                   particle_cur, particle_cand, st_rand, gsvec, lsvec, &
-                                  gsgmat_l, gsdvec, dsd, nsar_total)
+                                  gsgmat, gsdvec, dsd, nsar_total)
         implicit none
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), gmat(:, :), sigma2_full(:), alpha2_full(:), theta(:), &
-            log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), gsgmat_l(:, :), &
+            log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), gsgmat(:, :), &
             gsdvec(:), dsd
-        integer, intent(in) :: nnode, ndof, ngnss, nobs, nplane, nxi, neta, &
+        integer, intent(in) :: nnode, ndof, ngnss, nobs, nplane, &
                                nparticle, ndim, lmat_index(:, :), assigned_num(:), &
                                nsar_total
         double precision, intent(inout) ::  particles(:, :), &
@@ -1226,6 +1229,7 @@ contains
         double precision ::likelihood_cur, likelihood_cand, &
             prior_cur, prior_cand, post_cur, post_cand, metropolis
         double precision :: v1, v2 ! box muller
+
         do iparticle = 1, nparticle
             do idim = 1, ndim
                 call slip_BoxMuller(v1, v2)
@@ -1265,24 +1269,30 @@ contains
                 call dtrmv('l', 'n', 'n', ndim, cov, ndim, st_rand, 1)
                 do idim = 1, ndim
                     particle_cand(idim) = particle_cur(idim) + st_rand(idim)
-                    ! !   non negative constraints
-                    ! if (particle_cand(idim) < 0d0) then
-                    !     particle_cand(idim) = -particle_cand(idim)
-                    ! end if
-                    ! !   max slip constraints
-                    ! if (particle_cand(idim) > max_slip) then
-                    !     particle_cand(idim) = 2*max_slip - particle_cand(idim)
-                    ! end if
+                    !   non negative constraints
+                    if (particle_cand(idim) < 0d0) then
+                        particle_cand(idim) = -particle_cand(idim)
+                    end if
+                    !   max slip constraints
+                    if (particle_cand(idim) > max_slip) then
+                        particle_cand(idim) = 2*max_slip - particle_cand(idim)
+                    end if
                 end do
 
                 ! calculate negative log likelihood/prior/posterior
                 ! of the proposed configuration
+                ! likelihood_cand = slip_calc_likelihood( &
+                !                   particle_cand, dvec, sigma2_full, gmat, &
+                !                   log_sigma_sar2, log_sigma_gnss2, ngnss, &
+                !                   gsvec, nobs, ndof, gsgmat_l, gsdvec, dsd, nsar_total)
                 likelihood_cand = slip_calc_likelihood( &
-                                  particle_cand, dvec, sigma2_full, gmat, &
-                                  log_sigma_sar2, log_sigma_gnss2, ngnss, &
-                                  gsvec, nobs, ndof, gsgmat_l, gsdvec, dsd, nsar_total)
+                                particle_cand, dvec, sigma2_full, gmat, &
+                                log_sigma_sar2, log_sigma_gnss2, ngnss, &
+                                gsvec, nobs, ndof, gsgmat, gsdvec, dsd, nsar_total)
+                ! prior_cand = slip_calc_prior(particle_cand, alpha2_full, theta, nplane, &
+                !                              lmat_index, lmat_val, lsvec, nnode)
                 prior_cand = slip_calc_prior(particle_cand, alpha2_full, theta, nplane, &
-                                             lmat_index, lmat_val, lsvec, nnode)
+                                            lmat_index, lmat_val, lsvec, nnode)
 
                 !  metropolis test
                 metropolis = metropolis_ls(jparticle)
@@ -1574,28 +1584,17 @@ contains
                                    particle_cur, particle_cand, st_rand, gsvec, lsvec, &
                                    dtau_ls, ntau_ls, gsdvec, gsgmat, ntau_upper, dsd, nsar_total)
 
-            ! call slip_hmc_sampling(gamma, particles, particles_new, &
-            !                        likelihood_ls, likelihood_ls_new, prior_ls, &
-            !                        prior_ls_new, cov, cov_diag, assigned_num, id_start, &
-            !                        nparticle, ndim, dvec, sigma2_full, alpha2_full, &
-            !                        theta, nplane, &
-            !                        gmat, log_sigma_sar2, log_sigma_gnss2, &
-            !                        ngnss, nobs, ndof, lmat_index, lmat_val, &
-            !                        ltmat_index, ltmat_val, &
-            !                        nnode, max_slip, st_rand_ls, metropolis_ls, &
-            !                        particle_cur, particle_cand, st_rand, gsvec, lsvec, &
-            !                        dtau_ls, ntau_ls, gsdvec, gsgmat, ntau_upper, dsd, nsar_total)
+            ! call slip_mcmc_sampling(gamma, particles, particles_new, & 
+            !                         likelihood_ls, likelihood_ls_new, prior_ls, &
+            !                         prior_ls_new, cov, assigned_num, id_start, &
+            !                         nparticle, ndim, dvec, sigma2_full, alpha2_full, &
+            !                         theta, nplane,  &
+            !                         gmat, log_sigma_sar2, log_sigma_gnss2, &
+            !                         ngnss, nobs, ndof, lmat_index, lmat_val, &
+            !                         nnode, max_slip, st_rand_ls, metropolis_ls, &
+            !                         particle_cur, particle_cand, st_rand, gsvec, lsvec, &
+            !                         gsgmat, gsdvec, dsd, nsar_total)
 
-            ! call slip_mcmc_sampling(gamma, particles, particles_new, &
-            !                         likelihood_ls, likelihood_ls_new, &
-            !                         prior_ls, prior_ls_new, &
-            !                         cov, assigned_num, id_start, nparticle, &
-            !                         ndim, dvec, sigma2_full, alpha2_full, &
-            !                         theta, nplane, nxi, neta, gmat, log_sigma_sar2, &
-            !                         log_sigma_gnss2, nsar, ngnss, nobs, ndof, &
-            !                         lmat_index, lmat_val, nnode, max_slip, &
-            !                         st_rand_ls, metropolis_ls, particle_cur, &
-            !                         particle_cand, st_rand, gsvec, lsvec)
             en_time1 = omp_get_wtime()
             ! print *, "loop total: ", en_time1 - st_time1
             ! print *, "hmc: ", en_time1 - st_time2
