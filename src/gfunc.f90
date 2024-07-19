@@ -332,6 +332,7 @@ contains
                     target_id_val(itarget) = node_to_elem_val(itarget, inode)
                 end do
                 do idirection = 1, 2
+                    ! print *, iplane, idof, idirection
                     ! slip distribution with single unit slip
                     call gen_unit_slip(inode, idirection, slip_dist)
                     ! calculate displacement (x, y, z components) at all the

@@ -147,7 +147,8 @@ contains
         ! open(10, file="tmp/sigma1", status="replace")
         ! do iobs = 1, sigma_sar_mat(1)%nrow
         !     do jobs = 1, sigma_sar_mat(1)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(1)%body(iobs, jobs)/sigma_sar2
+        !         ! write(10, "(e20.10)", advance="no") sigma_sar_mat(1)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(1)%body(iobs, jobs)
         !     end do
         !     write(10, *)
         ! end do
@@ -156,7 +157,8 @@ contains
         ! open(10, file="tmp/sigma2", status="replace")
         ! do iobs = 1, sigma_sar_mat(2)%nrow
         !     do jobs = 1, sigma_sar_mat(2)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(2)%body(iobs, jobs)/sigma_sar2
+        !         ! write(10, "(e20.10)", advance="no") sigma_sar_mat(2)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(2)%body(iobs, jobs)
         !     end do
         !     write(10, *)
         ! end do
@@ -165,7 +167,8 @@ contains
         ! open(10, file="tmp/sigma3", status="replace")
         ! do iobs = 1, sigma_sar_mat(3)%nrow
         !     do jobs = 1, sigma_sar_mat(3)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(3)%body(iobs, jobs)/sigma_sar2
+        !         ! write(10, "(e20.10)", advance="no") sigma_sar_mat(3)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(3)%body(iobs, jobs)
         !     end do
         !     write(10, *)
         ! end do
@@ -174,7 +177,8 @@ contains
         ! open(10, file="tmp/sigma4", status="replace")
         ! do iobs = 1, sigma_sar_mat(4)%nrow
         !     do jobs = 1, sigma_sar_mat(4)%nrow
-        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(4)%body(iobs, jobs)/sigma_sar2
+        !         ! write(10, "(e20.10)", advance="no") sigma_sar_mat(4)%body(iobs, jobs)/sigma_sar2
+        !         write(10, "(e20.10)", advance="no") sigma_sar_mat(4)%body(iobs, jobs)
         !     end do
         !     write(10, *)
         ! end do
@@ -184,7 +188,8 @@ contains
         ! do iobs = nsar_index(npath + 1),  nobs
         !     do jobs = nsar_index(npath + 1),  nobs
         !         if (iobs == jobs) then
-        !             write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2*sigma_gnss2)
+        !             ! write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2*sigma_gnss2)
+        !             write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2)
         !         else 
         !             write(10, "(e20.10)", advance="no") 0d0
         !         end if
@@ -192,6 +197,7 @@ contains
         !     write(10, *)
         ! end do
         ! close(10)
+        ! stop
 
         ! open(10, file="tmp/gmat", status="replace")
         ! do iobs = 1, nobs
