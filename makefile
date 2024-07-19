@@ -7,8 +7,8 @@
 # ibis
 COMPILER_F90 = mpiifort -fc=ifx
 COMPILER_CPP = mpiicpc -cxx=icpx 
-FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -module ./mod
-FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi 
+FLAGS_F90   = -O3 -fopenmp -qmkl -lmpi -fpe0 -fp-model=precise -module ./mod -traceback
+FLAGS_CPP   = -O3 -fopenmp -qmkl -lmpi -fp-model=precise
 
 # for debug 
 # FLAGS_F90   = -g -fopenmp -check all -traceback -qmkl -lmpi -fpe0 -fp-model=precise -module ./mod
@@ -30,7 +30,7 @@ $(TARGET): $(OBJECTS_F90) $(OBJECT_DC3D) $(OBJECTS_CPP)
 obj/sort.o: src/sort.cpp
 	$(COMPILER_CPP) -o $@ -c $^ $(FLAGS_CPP) 
 
-obj/init.o: src/init.f90
+obj/init.o: src/init.f90  obj/mat.o
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 
 obj/gfunc.o: src/gfunc.f90 obj/DC3Dfortran.o
@@ -39,13 +39,16 @@ obj/gfunc.o: src/gfunc.f90 obj/DC3Dfortran.o
 obj/smc_slip.o: src/smc_slip.f90
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 
-obj/smc_fault.o: src/smc_fault.f90 obj/init.o obj/gfunc.o obj/smc_slip.o obj/sort.o
-	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
-	
-obj/main.o: src/main.f90 obj/init.o obj/gfunc.o obj/smc_fault.o
+obj/mat.o: src/mat.f90
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 
-obj/DC3Dfortran.o: src/DC3Dfortran.f
+obj/smc_fault.o: src/smc_fault.f90 obj/init.o obj/gfunc.o obj/smc_slip.o obj/sort.o 
+	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
+	
+obj/main.o: src/main.f90 obj/init.o obj/gfunc.o obj/smc_fault.o 
+	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
+
+obj/DC3Dfortran.o: src/DC3Dfortran.f90
 	$(COMPILER_F90) -o $@ -c $^ $(FLAGS_F90) 
 
 all: clean $(TARGET)
