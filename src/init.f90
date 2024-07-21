@@ -119,9 +119,9 @@ contains
     end subroutine calc_sigma_sar_mat
 
     subroutine discretize_fault(theta, nplane, nxi_ls, neta_ls, cny, coor, &
-                                node_to_elem_val, node_to_elem_size, id_dof)
+                                node_to_elem_val, node_to_elem_size, id_dof, zmin)
         implicit none
-        double precision, intent(in) :: theta(:)
+        double precision, intent(in) :: theta(:), zmin
         integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:)
         double precision, intent(inout) :: coor(:, :)
         integer, intent(inout) :: cny(:, :), &
@@ -132,7 +132,10 @@ contains
         integer :: offset_node, offset_patch
         integer :: nxi, neta
         integer :: node1, node2, node3, node4
-        double precision :: xi, eta, dxi, deta, lxi, leta
+        double precision :: xi, eta, dxi, deta, lxi, leta, dip, dip_rad
+        double precision :: pi
+
+        pi = 2d0 * asin(1d0)
 
         cnt = 1
         offset_node = 0
@@ -140,8 +143,10 @@ contains
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            lxi = theta(iplane*8 - 2)
-            leta = theta(iplane*8 - 1)
+            lxi = theta(iplane*4 - 0)
+            dip = theta(iplane*4 - 1)
+            dip_rad = dip * pi / 180d0
+            leta = (0d0 - zmin) / sin(dip_rad)
             ! length of a patch
             dxi = lxi/nxi
             deta = leta/neta
@@ -236,13 +241,15 @@ contains
         ! stop
     end subroutine discretize_fault
 
-    subroutine gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, id_dof, ndof_total, luni, lmat)
+    subroutine gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, id_dof, ndof_total, luni, lmat, zmin)
         implicit none
         integer, intent(in) :: nplane, nnode_total, nxi_ls(:), neta_ls(:), id_dof(:), ndof_total
-        double precision, intent(in) :: theta(:)
+        double precision, intent(in) :: theta(:), zmin
         double precision, intent(inout) ::  luni(:, :), lmat(:, :)
-        double precision :: dxi, deta, lxi, leta, dcross
+        double precision :: dxi, deta, lxi, leta, dcross, dip, dip_rad, pi
         integer :: iplane, inode, idof, jnode, nxi, neta, offset, k, l
+
+        pi = 2d0 * asin(1d0)
         ! laplacian for single component
         do jnode = 1, nnode_total
             do inode = 1, nnode_total
@@ -254,8 +261,10 @@ contains
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            lxi = theta(iplane*8 - 2)
-            leta = theta(iplane*8 - 1)
+            lxi = theta(iplane*4 - 0)
+            dip = theta(iplane*4 - 1)
+            dip_rad = dip * pi / 180d0
+            leta = (0d0 - zmin) / sin(dip_rad)
             dxi = lxi/nxi
             deta = leta/neta
             dcross = sqrt(dxi**2 + deta**2)

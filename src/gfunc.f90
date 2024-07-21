@@ -245,7 +245,7 @@ contains
                                 id_dof, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                                 node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                                 r1vec, r2vec, nvec, response_dist, uobs, uret, nsar_total, npath, &
-                                nsar_index, gmat_arr)
+                                nsar_index, gmat_arr, zmin, x0_ls, y0_ls)
         implicit none
         double precision, intent(inout) :: gmat(:, :), slip_dist(:, :), &
             xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -254,7 +254,7 @@ contains
         integer, intent(in) :: cny_fault(:, :), node_to_elem_val(:, :), &
                                node_to_elem_size(:), id_dof(:), nsar_total
         double precision, intent(in) :: theta(:), coor_fault(:, :), obs_points(:, :), &
-            obs_unitvec(:, :)
+            obs_unitvec(:, :), zmin, x0_ls(:), y0_ls(:)
 
         integer, intent(in) ::  nplane, nxi_ls(:), neta_ls(:), ngnss, nobs, &
                                 nnode_total, ndof_total, ndof_index(:), npath, &
@@ -263,7 +263,9 @@ contains
         integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j, ipath, k
         integer :: target_id_size, nxi, neta, offset
         double precision :: xf, yf, zf, strike, dip, lxi, leta, strike_rad, dip_rad
-        double precision :: pi = 4d0*atan(1d0)
+        double precision :: pi, x0, y0, z0
+
+        pi = 2d0 * asin(1d0)
 
         ! initialize gmat
         do j = 1, 2*ndof_total
@@ -282,49 +284,20 @@ contains
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            ! xf = theta(1)
-            ! yf = theta(2)
-            ! zf = theta(3)
-            ! strike = theta(4)
-            ! strike_rad = strike*pi/180d0
-            ! dip = theta(5)
-            ! dip_rad = dip*pi/180d0
-            ! lxi = theta(6)
-            ! leta = theta(7)
-            ! if (iplane == 2) then
-            !     xf = xf - leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-            !     yf = yf + leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-            !     zf = zf + leta/2d0*sin(dip_rad)
-
-            !     xf = xf + theta(9)
-            !     yf = yf + theta(10)
-            !     zf = zf + theta(11)
-
-            !     strike = strike + theta(12)
-            !     strike_rad = strike*pi/180d0
-            !     dip = dip + theta(13)
-            !     dip_rad = dip*pi/180d0
-            !     lxi = theta(14)
-            !     leta = theta(15)
-
-            !     xf = xf + leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-            !     yf = yf - leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-            !     zf = zf - leta/2d0*sin(dip_rad)
-            ! end if
-            xf = theta(8*iplane - 7)
-            yf = theta(8*iplane - 6)
-            zf = theta(8*iplane - 5)
-            strike = theta(8*iplane - 4)
+            x0 = x0_ls(iplane)
+            y0 = y0_ls(iplane)
+            z0 = theta(4*iplane - 3)
+            strike = theta(4*iplane - 2)
             strike_rad = strike*pi/180d0
-            dip = theta(8*iplane - 3)
+            dip = theta(4*iplane - 1)
             dip_rad = dip*pi/180d0
-            lxi = theta(8*iplane - 2)
-            leta = theta(8*iplane - 1)
+            lxi = theta(4*iplane - 0)
+            leta = (0d0 - zmin) / sin(dip_rad)
+            xf = x0 + (z0 - zmin/2d0) * cos(strike_rad) / tan(dip_rad)
+            yf = y0 - (z0 - zmin/2d0) * sin(strike_rad) / tan(dip_rad)
+            zf = zmin / 2d0
 
             ! loop for each degree of freedom of slip
-            ! do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &
-            !     (nxi - 1)*(neta - 1)*iplane
-            ! do idof = offset + 1, offset + (nxi + 1)*(neta + 1)              
             do idof = ndof_index(iplane), ndof_index(iplane + 1) - 1
                 inode = id_dof(idof)
                 target_id_size = node_to_elem_size(inode)

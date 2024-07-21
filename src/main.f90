@@ -67,7 +67,10 @@ program main
 
     ! SMC for fault
     double precision, allocatable :: range(:, :)
+
     character(len=500) :: output_dir, command
+    double precision, allocatable :: x0_ls(:), y0_ls(:)
+    double precision :: zmin
 
     ! MPI
     integer :: myid, numprocs, nthreads
@@ -103,6 +106,8 @@ program main
         read (17, *) nplane
         allocate(nxi_ls(nplane))
         allocate(neta_ls(nplane))
+        allocate(x0_ls(nplane))
+        allocate(y0_ls(nplane))
         allocate(npatch_ls(nplane))
         allocate(nnode_ls(nplane))
         allocate(ndof_ls(nplane))
@@ -131,6 +136,14 @@ program main
         read (17, *) nxi_ls
         read (17, *) ! neta
         read (17, *) neta_ls
+        read (17, *)
+        read (17, *) ! x0
+        read (17, *) x0_ls
+        read (17, *) ! y0
+        read (17, *) y0_ls
+        read (17, *)
+        read (17, *) ! zmin
+        read (17, *) zmin
         close (17)
         print *, "nplane: ", nplane
         print *, "nparticle_fault: ", nparticle_fault
@@ -146,9 +159,12 @@ program main
     call mpi_bcast(nparticle_fault, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(nparticle_slip, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(max_slip, 1, mpi_double_precision, 0, mpi_comm_world, ierr)
+    call mpi_bcast(zmin, 1, mpi_double_precision, 0, mpi_comm_world, ierr)
     if (myid /= 0) then
         allocate(nxi_ls(nplane))
         allocate(neta_ls(nplane))
+        allocate(x0_ls(nplane))
+        allocate(y0_ls(nplane))
         allocate(nsar_ls(npath))
         allocate(nsar_index(npath + 1))
         allocate(sigma_sar_mat(npath))
@@ -160,6 +176,8 @@ program main
     end if
     call mpi_bcast(nxi_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(neta_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
+    call mpi_bcast(x0_ls, nplane, mpi_double_precision, 0, mpi_comm_world, ierr)
+    call mpi_bcast(y0_ls, nplane, mpi_double_precision, 0, mpi_comm_world, ierr)
 
     if (mod(nparticle_fault, numprocs) /= 0) then
         if (myid == 0) then
@@ -208,7 +226,7 @@ program main
     end do
 
     ! dimension of fault parameter
-    ndim_fault = 2 + 8*nplane
+    ndim_fault = 3 + 4*nplane
     ndim_slip = 2 * ndof_total
     if (myid == 0) then
         print *, "ndim_fault: ", ndim_fault
@@ -407,7 +425,7 @@ program main
     ! ! close (10)
 
     ! ! open (10, file="mean_fault.dat", status="old")
-    ! open (10, file="peak_fault.dat", status="old")
+    ! open (10, file="data/theta.dat", status="old")
     ! ! open(10, file="theta_true.dat", status="old")
     ! do i = 1, ndim_fault
     !     read (10, *) particle(i)
@@ -429,7 +447,7 @@ program main
     !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
     !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
     !          slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat", &
-    !          npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+    !          npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, zmin, x0_ls, y0_ls)
     ! ! neglog = fault_calc_likelihood( &
     ! !          particle, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, ngnss, nobs, cny_fault, &
     ! !          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
@@ -442,71 +460,59 @@ program main
     ! !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
     ! !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
     ! !          slip_particle_cand, slip_st_rand, 0, "", &
-    ! !          npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+    ! !          npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, zmin)
     ! en_time = omp_get_wtime()
     ! print *, "etime: ", en_time - st_time
     ! print *, "neglog: ", neglog
     ! print *, "Ndim slip: ", ndim_slip
     ! print *, "ABIC: ", 2d0*neglog + 2d0*ndim_fault
 
-    call calc_slip_map("from_fugaku/shuf/38400_cov_pos.csv")
+    ! call calc_slip_map("from_fugaku/shuf/38400_cov_pos.csv")
     ! if (myid == 0) then
     !     call point_cloud("from_fugaku/shuf/192000_cov_pos.csv", &
     !                      "output/shuf/mapslip_192000.dat")
     ! end if
 
-    ! ! smc for fault
-    ! allocate (range(2, ndim_fault))
-    ! ! range of uniform prior distribution P(theta)
-    ! ! ! synthetic test
-    ! ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-    ! ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
-    ! ! !                       (/2, ndim_fault/))
-    ! ! ! real observation data
-    ! ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
-    ! !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
-    ! !                       (/2, ndim_fault/))
+    ! smc for fault
+    allocate (range(2, ndim_fault))
 
-    ! ! read prior range of theta
-    ! if (myid == 0) then
-    !     open (17, file="data/range.dat", status="old")
-    !     do i = 1, ndim_fault
-    !         read (17, "(a)") ! param
-    !         read (17, *) range(1, i), range(2, i)
-    !     end do
-    !     close (17)
-    !     print *, "prior range"
-    !     do i = 1, nplane
-    !         print *, "fault plane: ", i
-    !         print *, "xf ", range(1, 8*i - 7), range(2, 8*i - 7)
-    !         print *, "yf ", range(1, 8*i - 6), range(2, 8*i - 6)
-    !         print *, "zf ", range(1, 8*i - 5), range(2, 8*i - 5)
-    !         print *, "strike ", range(1, 8*i - 4), range(2, 8*i - 4)
-    !         print *, "dip ", range(1, 8*i - 3), range(2, 8*i - 3)
-    !         print *, "lxi ", range(1, 8*i - 2), range(2, 8*i - 2)
-    !         print *, "leta ", range(1, 8*i - 1), range(2, 8*i - 1)
-    !         print *, "log_alpha2 ", range(1, 8*i - 0), range(2, 8*i - 0)
-    !     end do
-    !     print *, "log_sigma_sar2 ", range(1, 8*nplane + 1), range(2, 8*nplane + 1)
-    !     print *, "log_sigma_gnss2 ", range(1, 8*nplane + 2), range(2, 8*nplane + 2)
-    ! end if
-    ! call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
-    !                mpi_comm_world, ierr)
+    ! read prior range of theta
+    if (myid == 0) then
+        open (17, file="data/range.dat", status="old")
+        do i = 1, ndim_fault
+            read (17, "(a)") ! param
+            read (17, *) range(1, i), range(2, i)
+        end do
+        close (17)
+        print *, "prior range"
+        do i = 1, nplane
+            print *, "fault plane: ", i
+            print *, "z0 ", range(1, 4*i - 3), range(2, 4*i - 3)
+            print *, "strike ", range(1, 4*i - 2), range(2, 4*i - 2)
+            print *, "dip ", range(1, 4*i - 1), range(2, 4*i - 1)
+            print *, "lxi ", range(1, 4*i - 0), range(2, 4*i - 0)
+        end do
+        print *, "log_alpha2", range(1, 4*nplane + 1), range(2, 4*nplane + 1)
+        print *, "log_sigma_sar2 ", range(1, 4*nplane + 2), range(2, 4*nplane + 2)
+        print *, "log_sigma_gnss2 ", range(1, 4*nplane + 3), range(2, 4*nplane + 3)
+    end if
+    call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
+                   mpi_comm_world, ierr)
 
-    ! call fault_smc_exec( &
-    !     output_dir, range, nplane, nparticle_fault, ndim_fault, &
-    !     myid, numprocs, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, ngnss, nobs, cny_fault, &
-    !     coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
-    !     lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
-    !     obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
-    !     xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
-    !     response_dist, uobs, uret, slip_particles, &
-    !     slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
-    !     lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
-    !     slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
-    !     slip_st_rand, slip_particle_cur, slip_particle_cand, &
-    !     slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls, &
-    !     npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+    call fault_smc_exec( &
+        output_dir, range, nplane, nparticle_fault, ndim_fault, &
+        myid, numprocs, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, ngnss, nobs, cny_fault, &
+        coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
+        lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
+        obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
+        xinode, etanode, uxinode, uetanode, r1vec, r2vec, nvec, &
+        response_dist, uobs, uret, slip_particles, &
+        slip_particles_new, nparticle_slip, max_slip, dvec, gsvec, &
+        lsvec, slip_likelihood_ls, slip_prior_ls, slip_weights, slip_mean, &
+        slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
+        slip_st_rand, slip_particle_cur, slip_particle_cand, &
+        slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls, &
+        npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, zmin, x0_ls, y0_ls)
     call mpi_finalize(ierr)
 
 contains
@@ -576,7 +582,7 @@ contains
                     slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                     slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                     slip_particle_cand, slip_st_rand, 0, "", &
-                    npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+                    npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, zmin, x0_ls, y0_ls)
 
             print *, "ID: ", work_size*myid + i
             do j = 1, ndim_slip
@@ -685,7 +691,7 @@ contains
             end do
 
             call discretize_fault(particle, nplane, nxi_ls, neta_ls, cny_fault, coor_fault, &
-                                  node_to_elem_val, node_to_elem_size, id_dof)
+                                  node_to_elem_val, node_to_elem_size, id_dof, zmin)
 
             offset_patch = 0
             ! loop for patchs
