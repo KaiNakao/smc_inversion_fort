@@ -73,7 +73,7 @@ contains
         do ipath = 1, npath
             nsar_total = nsar_total + nsar_ls(ipath)
             nsar_index(ipath + 1) = nsar_index(ipath) + nsar_ls(ipath)
-        end do 
+        end do
         ! GNSS observation have 3 direction components
         ngnss = ngnss/3
         close (10)
@@ -83,7 +83,7 @@ contains
                                   obs_points, obs_sigma, sigma_sar_mat)
         implicit none
         integer, intent(in) :: npath, nsar_ls(:), nsar_index(:)
-        double precision, intent(in) :: obs_points(:,:), obs_sigma(:)
+        double precision, intent(in) :: obs_points(:, :), obs_sigma(:)
         type(mat), intent(inout) :: sigma_sar_mat(:)
         integer :: ipath, iobs, jobs, nobs, iobs_start, lwork, info
         integer, allocatable :: ipiv(:)
@@ -94,8 +94,8 @@ contains
             nobs = nsar_ls(ipath)
             iobs_start = nsar_index(ipath)
             lwork = nobs
-            allocate(ipiv(nobs))
-            allocate(work(lwork))
+            allocate (ipiv(nobs))
+            allocate (work(lwork))
             do iobs = 1, nobs
                 xi = obs_points(1, iobs_start - 1 + iobs)
                 yi = obs_points(2, iobs_start - 1 + iobs)
@@ -104,8 +104,8 @@ contains
                     yj = obs_points(2, iobs_start - 1 + jobs)
                     dist = sqrt((xi - xj)**2 + (yi - yj)**2)
                     sigma_sar_mat(ipath)%body(iobs, jobs) = &
-                        obs_sigma(nsar_index(ipath) + iobs) * &
-                        obs_sigma(nsar_index(ipath) + jobs) * &
+                        obs_sigma(nsar_index(ipath) + iobs)* &
+                        obs_sigma(nsar_index(ipath) + jobs)* &
                         exp(-dist/1d1)
                 end do
             end do
@@ -113,13 +113,14 @@ contains
                         nobs, ipiv, info)
             call dgetri(nobs, sigma_sar_mat(ipath)%body, &
                         nobs, ipiv, work, lwork, info)
-            deallocate(ipiv)
-            deallocate(work)
+            deallocate (ipiv)
+            deallocate (work)
         end do
     end subroutine calc_sigma_sar_mat
 
     subroutine discretize_fault(theta, nplane, nxi_ls, neta_ls, cny, coor, &
-                                node_to_elem_val, node_to_elem_size, id_dof)
+                                node_to_elem_val, node_to_elem_size, id_dof, &
+                                xmin, xmax, zmin)
         implicit none
         double precision, intent(in) :: theta(:)
         integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:)
@@ -132,16 +133,44 @@ contains
         integer :: offset_node, offset_patch
         integer :: nxi, neta
         integer :: node1, node2, node3, node4
-        double precision :: xi, eta, dxi, deta, lxi, leta
+        double precision :: xi, eta, dxi, deta, lxi, leta, ymid, strike, dip, &
+            strike_rad, dip_rad, xmin, xmax, zmin, xl, xr, yl, yr, ymin, ymax
+        double precision :: pi
+
+        pi = 4d0*atan(1d0)
 
         cnt = 1
         offset_node = 0
         offset_patch = 0
+
+        ymin = theta(1)
+        ymax = theta(2)
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            lxi = theta(iplane*8 - 2)
-            leta = theta(iplane*8 - 1)
+
+            if (iplane == 1) then
+                xl = xmin
+                yl = ymin
+            else
+                xl = theta(2*iplane - 1)
+                yl = theta(2*iplane)
+            end if
+
+            if (iplane == nplane) then
+                xr = xmax
+                yr = ymax
+            else
+                xr = theta(2*iplane + 1)
+                yr = theta(2*iplane + 2)
+            end if
+
+            dip = theta(2*nplane + iplane)
+            dip_rad = dip*pi/180d0
+
+            lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
+            leta = -zmin/sin(dip_rad)
+
             ! length of a patch
             dxi = lxi/nxi
             deta = leta/neta
@@ -162,19 +191,6 @@ contains
                         node_to_elem_val(k, node_id) = -1
                     end do
                     ! no degree of freedom on the edge of the fault
-                    ! if (iplane == 1) then
-                    !     if (i == 1 .or. j == 1) then
-                    !         cycle
-                    !     end if
-                    ! else if (iplane == nplane) then
-                    !     if (i == nxi + 1 .or. j == 1) then
-                    !         cycle
-                    !     end if
-                    ! else
-                    !     if (j == 1) then
-                    !         cycle
-                    !     end if
-                    ! end if
                     if (j == 1) then
                         cycle
                     end if
@@ -196,11 +212,7 @@ contains
             ! node id of patches
             do j = 1, neta
                 do i = 1, nxi
-                    ! patch_id = i + nxi*(j - 1) &
-                    !            + (iplane - 1)*nxi*neta
                     patch_id = offset_patch + i + nxi*(j - 1)
-                    ! node1 = i + (nxi + 1)*(j - 1) &
-                    !         + (iplane - 1)*(nxi + 1)*(neta + 1)
                     node1 = i + (nxi + 1)*(j - 1) &
                             + offset_node
                     node2 = node1 + 1
@@ -218,31 +230,22 @@ contains
                     end do
                 end do
             end do
-            offset_patch = offset_patch + nxi * neta
-            offset_node = offset_node + (nxi + 1) * (neta + 1)
+            offset_patch = offset_patch + nxi*neta
+            offset_node = offset_node + (nxi + 1)*(neta + 1)
         end do
-
-        ! offset_node = 0
-        ! do iplane = 1, nplane
-        !     nxi = nxi_ls(iplane)
-        !     neta = neta_ls(iplane)
-        !     do inode = offset_node + 1, offset_node + (nxi + 1) * (neta + 1)
-        !         k = mod((inode - 1 - offset_node), (nxi + 1)) + 1
-        !         l = (inode - 1 - offset_node) / (nxi + 1) + 1
-        !         print *, coor(1, inode), coor(2, inode), k, l
-        !     end do
-        !     offset_node = offset_node + (nxi + 1) * (neta + 1)
-        ! end do
-        ! stop
     end subroutine discretize_fault
 
-    subroutine gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, id_dof, ndof_total, luni, lmat)
+    subroutine gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, &
+                             id_dof, ndof_total, luni, lmat, xmin, xmax, zmin)
         implicit none
         integer, intent(in) :: nplane, nnode_total, nxi_ls(:), neta_ls(:), id_dof(:), ndof_total
-        double precision, intent(in) :: theta(:)
+        double precision, intent(in) :: theta(:), xmin, xmax, zmin
         double precision, intent(inout) ::  luni(:, :), lmat(:, :)
-        double precision :: dxi, deta, lxi, leta, dcross
+        double precision :: dxi, deta, lxi, leta, dcross, &
+            xl, yl, xr, yr, ymax, ymin, dip, dip_rad, pi
         integer :: iplane, inode, idof, jnode, nxi, neta, offset, k, l
+
+        pi = 4d0*atan(1d0)
         ! laplacian for single component
         do jnode = 1, nnode_total
             do inode = 1, nnode_total
@@ -251,83 +254,106 @@ contains
         end do
 
         offset = 0
+        ymin = theta(1)
+        ymax = theta(2)
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            lxi = theta(iplane*8 - 2)
-            leta = theta(iplane*8 - 1)
+
+            if (iplane == 1) then
+                xl = xmin
+                yl = ymin
+            else
+                xl = theta(2*iplane - 1)
+                yl = theta(2*iplane)
+            end if
+
+            if (iplane == nplane) then
+                xr = xmax
+                yr = ymax
+            else
+                xr = theta(2*iplane + 1)
+                yr = theta(2*iplane + 2)
+            end if
+
+            dip = theta(2*nplane + iplane)
+            dip_rad = dip*pi/180d0
+
+            lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
+            leta = -zmin/sin(dip_rad)
+
             dxi = lxi/nxi
             deta = leta/neta
             dcross = sqrt(dxi**2 + deta**2)
             ! do inode = &
             !     1 + (nxi + 1)*(neta + 1)*(iplane - 1), (nxi + 1)*(neta + 1)*iplane
-            do inode = offset + 1, offset + (nxi + 1) * (neta + 1)
+            do inode = offset + 1, offset + (nxi + 1)*(neta + 1)
                 k = mod((inode - 1 - offset), (nxi + 1)) + 1
-                l = (inode - 1 - offset) / (nxi + 1) + 1
+                l = (inode - 1 - offset)/(nxi + 1) + 1
 
                 luni(inode, inode) = luni(inode, inode) - 2d0/dxi**2
                 if (k == nxi + 1) then
                     luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2
-                else 
+                else
                     luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2
                 end if
 
                 if (k == 1) then
                     luni(inode, inode + 1) = luni(inode, inode + 1) + 1d0/dxi**2
-                else 
+                else
                     luni(inode, inode - 1) = luni(inode, inode - 1) + 1d0/dxi**2
                 end if
 
                 if (l == neta + 1) then
                     luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2
-                else 
+                else
                     luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2
                 end if
 
                 if (l == 1) then
                     luni(inode, inode + (nxi + 1)) = luni(inode, inode + (nxi + 1)) + 1d0/deta**2
-                else 
+                else
                     luni(inode, inode - (nxi + 1)) = luni(inode, inode - (nxi + 1)) + 1d0/deta**2
                 end if
 
                 if (k == nxi + 1 .and. l == neta + 1) then
-                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) + 1d0/(4d0*dxi*deta)
                 else if (k == nxi + 1) then
-                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 1d0/(4d0*dxi*deta)
                 else if (l == neta + 1) then
-                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/(4d0*dxi*deta)
                 else
-                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 1d0/(4d0*dxi*deta)
                 end if
 
                 if (k == 1 .and. l == neta + 1) then
-                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) - 1d0/(4d0*dxi*deta)
                 else if (k == 1) then
-                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) - 1d0/(4d0*dxi*deta)
                 else if (l == neta + 1) then
-                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) - 1d0/(4d0*dxi*deta)
                 else
-                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) - 1d0/(4d0*dxi*deta)
                 end if
 
                 if (k == 1 .and. l == 1) then
-                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) + 1d0/(4d0*dxi*deta)
                 else if (k == 1) then
-                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) + 1d0/(4d0*dxi*deta)
                 else if (l == 1) then
-                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) + 1d0/(4d0*dxi*deta)
                 else
-                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) + 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) + 1d0/(4d0*dxi*deta)
                 end if
 
                 if (k == nxi + 1 .and. l == 1) then
-                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) - 1) = luni(inode, inode + (nxi + 1) - 1) - 1d0/(4d0*dxi*deta)
                 else if (k == nxi + 1) then
-                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) - 1) = luni(inode, inode - (nxi + 1) - 1) - 1d0/(4d0*dxi*deta)
                 else if (l == 1) then
-                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode + (nxi + 1) + 1) = luni(inode, inode + (nxi + 1) + 1) - 1d0/(4d0*dxi*deta)
                 else
-                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) - 1d0/(4d0 * dxi * deta)
+                    luni(inode, inode - (nxi + 1) + 1) = luni(inode, inode - (nxi + 1) + 1) - 1d0/(4d0*dxi*deta)
                 end if
                 ! if (k == 1) then
                 !     luni(inode, inode + 1) = luni(inode, inode + 1) + 2d0/dxi**2
@@ -391,7 +417,7 @@ contains
                 !     luni(inode, inode) = luni(inode, inode) - 2d0/deta**2d0
                 ! end if
             end do
-            offset = offset + (nxi + 1) * (neta + 1)
+            offset = offset + (nxi + 1)*(neta + 1)
         end do
 
         ! laplacian for two components(u_xi, u_eta)
@@ -474,5 +500,6 @@ contains
         end do
         call dgemm("t", "n", m, m, n, 1d0, lmat, n, &
                    lmat, n, 0d0, llmat, m)
+        deallocate (tmp)
     end subroutine calc_ll
 end module init

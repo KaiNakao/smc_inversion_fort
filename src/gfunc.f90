@@ -70,7 +70,7 @@ contains
         double precision, intent(in) :: dip
         double precision :: M_PI, strike_rad, ux_rot, uy_rot
         double precision :: x, y, alpha, z, depth, pot1, pot2, pot3, pot4, &
-                ux, uy, uz, uxx, uyx, uzx, uxy, uyy, uzy, uxz, uyz, uzz
+            ux, uy, uz, uxx, uyx, uzx, uxy, uyy, uzy, uxz, uyz, uzz
         integer :: iret
         M_PI = 2d0*asin(1d0)
         strike_rad = strike/180d0*M_PI
@@ -176,9 +176,7 @@ contains
                     ysource = yf + eta*cos(dip_rad)*sin(strike_rad) + &
                               xi*cos(strike_rad)
                     zsource = zf + eta*sin(dip_rad)
-                    !   calculate displacement by Okada model
-                    ! call call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
-                    !                 dip_pass, area/4., strike, uret)
+                    ! calculate displacement by Okada model
                     call call_dc3d0(xsource, ysource, zsource, xobs, yobs, uxi, ueta, &
                                     dip, area/4d0, strike, uret)
                     ! if (zsource > 0d0) then
@@ -245,7 +243,7 @@ contains
                                 id_dof, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                                 node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                                 r1vec, r2vec, nvec, response_dist, uobs, uret, nsar_total, npath, &
-                                nsar_index, gmat_arr)
+                                nsar_index, gmat_arr, xmin, xmax, zmin)
         implicit none
         double precision, intent(inout) :: gmat(:, :), slip_dist(:, :), &
             xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -257,13 +255,16 @@ contains
             obs_unitvec(:, :)
 
         integer, intent(in) ::  nplane, nxi_ls(:), neta_ls(:), ngnss, nobs, &
-                                nnode_total, ndof_total, ndof_index(:), npath, &
-                                nsar_index(:)
+                               nnode_total, ndof_total, ndof_index(:), npath, &
+                               nsar_index(:)
         type(mat), intent(inout) :: gmat_arr(:)
         integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j, ipath, k
-        integer :: target_id_size, nxi, neta, offset
-        double precision :: xf, yf, zf, strike, dip, lxi, leta, strike_rad, dip_rad
-        double precision :: pi = 4d0*atan(1d0)
+        integer :: target_id_size, nxi, neta
+        double precision :: xf, yf, zf, strike, dip, lxi, leta, dip_rad, &
+            xmax, xmin, zmin, ymin, ymax, xl, xr, yl, yr
+        double precision :: pi
+
+        pi = 4d0*atan(1d0)
 
         ! initialize gmat
         do j = 1, 2*ndof_total
@@ -278,53 +279,43 @@ contains
             end do
         end do
 
-        offset = 0
+        ymin = theta(1)
+        ymax = theta(2)
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            ! xf = theta(1)
-            ! yf = theta(2)
-            ! zf = theta(3)
-            ! strike = theta(4)
-            ! strike_rad = strike*pi/180d0
-            ! dip = theta(5)
-            ! dip_rad = dip*pi/180d0
-            ! lxi = theta(6)
-            ! leta = theta(7)
-            ! if (iplane == 2) then
-            !     xf = xf - leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-            !     yf = yf + leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-            !     zf = zf + leta/2d0*sin(dip_rad)
 
-            !     xf = xf + theta(9)
-            !     yf = yf + theta(10)
-            !     zf = zf + theta(11)
+            if (iplane == 1) then
+                xl = xmin
+                yl = ymin
+            else
+                xl = theta(2*iplane - 1)
+                yl = theta(2*iplane)
+            end if
 
-            !     strike = strike + theta(12)
-            !     strike_rad = strike*pi/180d0
-            !     dip = dip + theta(13)
-            !     dip_rad = dip*pi/180d0
-            !     lxi = theta(14)
-            !     leta = theta(15)
+            if (iplane == nplane) then
+                xr = xmax
+                yr = ymax
+            else
+                xr = theta(2*iplane + 1)
+                yr = theta(2*iplane + 2)
+            end if
 
-            !     xf = xf + leta/2d0*cos(dip_rad)*cos(strike_rad) + lxi/2d0*sin(strike_rad)
-            !     yf = yf - leta/2d0*cos(dip_rad)*sin(strike_rad) + lxi/2d0*cos(strike_rad)
-            !     zf = zf - leta/2d0*sin(dip_rad)
-            ! end if
-            xf = theta(8*iplane - 7)
-            yf = theta(8*iplane - 6)
-            zf = theta(8*iplane - 5)
-            strike = theta(8*iplane - 4)
-            strike_rad = strike*pi/180d0
-            dip = theta(8*iplane - 3)
+            dip = theta(2*nplane + iplane)
             dip_rad = dip*pi/180d0
-            lxi = theta(8*iplane - 2)
-            leta = theta(8*iplane - 1)
+
+            strike = atan2(xr - xl, yr - yl)/pi*180d0
+
+            lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
+            leta = -zmin/sin(dip_rad)
+            print *, "strike: ", strike, " lxi: ", lxi, " leta: ", leta
+
+            ! xf, yf, zf is coordinate of fault center
+            xf = (xl + xr)/2d0
+            yf = (yl + yr)/2d0
+            zf = zmin/2d0
 
             ! loop for each degree of freedom of slip
-            ! do idof = 1 + (nxi - 1)*(neta - 1)*(iplane - 1), &
-            !     (nxi - 1)*(neta - 1)*iplane
-            ! do idof = offset + 1, offset + (nxi + 1)*(neta + 1)              
             do idof = ndof_index(iplane), ndof_index(iplane + 1) - 1
                 inode = id_dof(idof)
                 target_id_size = node_to_elem_size(inode)
@@ -332,7 +323,6 @@ contains
                     target_id_val(itarget) = node_to_elem_val(itarget, inode)
                 end do
                 do idirection = 1, 2
-                    ! print *, iplane, idof, idirection
                     ! slip distribution with single unit slip
                     call gen_unit_slip(inode, idirection, slip_dist)
                     ! calculate displacement (x, y, z components) at all the
@@ -355,7 +345,6 @@ contains
                     call del_unit_slip(inode, idirection, slip_dist)
                 end do
             end do
-            ! offset = offset + (nxi + 1) * (neta + 1)
         end do
 
         do ipath = 1, npath
