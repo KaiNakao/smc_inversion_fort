@@ -308,7 +308,6 @@ contains
 
             lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
             leta = -zmin/sin(dip_rad)
-            print *, "strike: ", strike, " lxi: ", lxi, " leta: ", leta
 
             ! xf, yf, zf is coordinate of fault center
             xf = (xl + xr)/2d0

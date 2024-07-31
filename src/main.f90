@@ -481,19 +481,20 @@ program main
         end do
         close (17)
         print *, "prior range"
+        print *, "ymin ", range(1, 1), range(2, 1)
+        print *, "ymax ", range(1, 1), range(2, 2)
+        if (nplane > 1) then
+            do i = 1, nplane - 1
+                print *, "x", i, " ", range(1, 2*i + 1), range(2, 2*i + 1)
+                print *, "y", i, " ", range(1, 2*i + 2), range(2, 2*i + 2)
+            end do
+        end if
         do i = 1, nplane
-            print *, "fault plane: ", i
-            print *, "xf ", range(1, 8*i - 7), range(2, 8*i - 7)
-            print *, "yf ", range(1, 8*i - 6), range(2, 8*i - 6)
-            print *, "zf ", range(1, 8*i - 5), range(2, 8*i - 5)
-            print *, "strike ", range(1, 8*i - 4), range(2, 8*i - 4)
-            print *, "dip ", range(1, 8*i - 3), range(2, 8*i - 3)
-            print *, "lxi ", range(1, 8*i - 2), range(2, 8*i - 2)
-            print *, "leta ", range(1, 8*i - 1), range(2, 8*i - 1)
-            print *, "log_alpha2 ", range(1, 8*i - 0), range(2, 8*i - 0)
+            print *, "dip", i, " ", range(1, 2*nplane + i), range(2, 2*nplane + i)
         end do
-        print *, "log_sigma_sar2 ", range(1, 8*nplane + 1), range(2, 8*nplane + 1)
-        print *, "log_sigma_gnss2 ", range(1, 8*nplane + 2), range(2, 8*nplane + 2)
+        print *, "log_alpha2 ", range(1, 3*nplane + 1), range(2, 3*nplane + 1)
+        print *, "log_sigma_sar2 ", range(1, 3*nplane + 2), range(2, 3*nplane + 2)
+        print *, "log_sigma_gnss2 ", range(1, 3*nplane + 3), range(2, 3*nplane + 3)
     end if
     call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
                    mpi_comm_world, ierr)
