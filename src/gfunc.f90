@@ -260,7 +260,7 @@ contains
         type(mat), intent(inout) :: gmat_arr(:)
         integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j, ipath, k
         integer :: target_id_size, nxi, neta
-        double precision :: xf, yf, zf, strike, dip, lxi, leta, dip_rad, &
+        double precision :: xf, yf, zf, strike, dip, lxi, leta, dip_rad, strike_rad, &
             xmax, xmin, zmin, ymin, ymax, xl, xr, yl, yr
         double precision :: pi
 
@@ -304,15 +304,19 @@ contains
             dip = theta(2*nplane + iplane)
             dip_rad = dip*pi/180d0
 
-            strike = atan2(xr - xl, yr - yl)/pi*180d0
+            strike_rad = atan2(xr - xl, yr - yl)
+            strike = strike_rad/pi*180d0
 
             lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
             leta = -zmin/sin(dip_rad)
 
             ! xf, yf, zf is coordinate of fault center
-            xf = (xl + xr)/2d0
-            yf = (yl + yr)/2d0
+            xf = (xl + xr)/2d0 - (zmin*cos(strike_rad))/(2d0*tan(dip_rad))
+            yf = (yl + yr)/2d0 + (zmin*sin(strike_rad))/(2d0*tan(dip_rad))
             zf = zmin/2d0
+            print *, "---------------"
+            print *, xf, yf, zf, lxi, leta
+            print *, "---------------"
 
             ! loop for each degree of freedom of slip
             do idof = ndof_index(iplane), ndof_index(iplane + 1) - 1
