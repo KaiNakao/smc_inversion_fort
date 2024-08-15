@@ -118,11 +118,89 @@ contains
         end do
     end subroutine calc_sigma_sar_mat
 
+    subroutine get_geometry(iplane, nplane, theta, nxi, nxi_ls, neta, neta_ls, &
+                            xl, yl, xr, yr, xmin, ymin, xmax, ymax, dip, dip_rad, &
+                            lxi, leta, zmin, fix_xbend, xbend)
+        implicit none
+        logical, intent(in) :: fix_xbend
+        integer, intent(in) :: iplane, nxi_ls(:), neta_ls(:), nplane
+        integer, intent(inout) :: nxi, neta
+        double precision, intent(in) :: theta(:), xmin, ymin, xmax, ymax, zmin, xbend(:)
+        double precision, intent(inout) :: xl, yl, xr, yr, dip, dip_rad, lxi, leta
+        double precision :: pi
+
+        pi = 4d0*atan(1d0)
+        nxi = nxi_ls(iplane)
+        neta = neta_ls(iplane)
+        if (fix_xbend) then
+            if (iplane == 1) then
+                xl = xmin
+                yl = ymin
+            else
+                xl = xbend(iplane - 1)
+                yl = theta(iplane + 1)
+            end if
+            if (iplane == nplane) then
+                xr = xmax
+                yr = ymax
+            else
+                xr = xbend(iplane)
+                yr = theta(iplane + 2)
+            end if
+            dip = theta(nplane + 1 + iplane)
+        else
+            if (iplane == 1) then
+                xl = xmin
+                yl = ymin
+            else
+                xl = theta(2*iplane - 1)
+                yl = theta(2*iplane)
+            end if
+            if (iplane == nplane) then
+                xr = xmax
+                yr = ymax
+            else
+                xr = theta(2*iplane + 1)
+                yr = theta(2*iplane + 2)
+            end if
+
+            dip = theta(2*nplane + iplane)
+        end if
+        dip_rad = dip*pi/180d0
+        lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
+        leta = -zmin/sin(dip_rad)
+
+    end subroutine get_geometry
+
+    subroutine get_sigma(theta, fix_xbend, nplane, &
+                         log_sigma_sar2, log_sigma_gnss2, log_alpha2)
+        implicit none
+
+        double precision, intent(in) :: theta(:)
+        logical, intent(in) :: fix_xbend
+        integer, intent(in) :: nplane
+        double precision, intent(inout) :: &
+            log_sigma_sar2, log_sigma_gnss2, log_alpha2
+        if (fix_xbend) then
+            log_alpha2 = theta(2*nplane + 2)
+            log_sigma_sar2 = theta(2*nplane + 3)
+            log_sigma_gnss2 = theta(2*nplane + 4)
+        else
+            log_alpha2 = theta(3*nplane + 1)
+            log_sigma_sar2 = theta(3*nplane + 2)
+            log_sigma_gnss2 = theta(3*nplane + 3)
+        end if
+        print *, "log_alpha2: ", log_alpha2
+        print *, "log_sigma_sar2: ", log_sigma_sar2
+        print *, "log_sigma_gnss2: ", log_sigma_gnss2
+    end subroutine get_sigma
+
     subroutine discretize_fault(theta, nplane, nxi_ls, neta_ls, cny, coor, &
                                 node_to_elem_val, node_to_elem_size, id_dof, &
-                                xmin, xmax, zmin)
+                                xmin, xmax, zmin, fix_xbend, xbend)
         implicit none
-        double precision, intent(in) :: theta(:)
+        logical, intent(in) :: fix_xbend
+        double precision, intent(in) :: theta(:), xbend(:)
         integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:)
         double precision, intent(inout) :: coor(:, :)
         integer, intent(inout) :: cny(:, :), &
@@ -146,30 +224,9 @@ contains
         ymin = theta(1)
         ymax = theta(2)
         do iplane = 1, nplane
-            nxi = nxi_ls(iplane)
-            neta = neta_ls(iplane)
-
-            if (iplane == 1) then
-                xl = xmin
-                yl = ymin
-            else
-                xl = theta(2*iplane - 1)
-                yl = theta(2*iplane)
-            end if
-
-            if (iplane == nplane) then
-                xr = xmax
-                yr = ymax
-            else
-                xr = theta(2*iplane + 1)
-                yr = theta(2*iplane + 2)
-            end if
-
-            dip = theta(2*nplane + iplane)
-            dip_rad = dip*pi/180d0
-
-            lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
-            leta = -zmin/sin(dip_rad)
+            call get_geometry(iplane, nplane, theta, nxi, nxi_ls, neta, neta_ls, &
+                              xl, yl, xr, yr, xmin, ymin, xmax, ymax, dip, dip_rad, &
+                              lxi, leta, zmin, fix_xbend, xbend)
 
             ! length of a patch
             dxi = lxi/nxi
@@ -236,10 +293,12 @@ contains
     end subroutine discretize_fault
 
     subroutine gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, &
-                             id_dof, ndof_total, luni, lmat, xmin, xmax, zmin)
+                             id_dof, ndof_total, luni, lmat, xmin, xmax, zmin, &
+                             fix_xbend, xbend)
         implicit none
         integer, intent(in) :: nplane, nnode_total, nxi_ls(:), neta_ls(:), id_dof(:), ndof_total
-        double precision, intent(in) :: theta(:), xmin, xmax, zmin
+        double precision, intent(in) :: theta(:), xmin, xmax, zmin, xbend(:)
+        logical, intent(in) :: fix_xbend
         double precision, intent(inout) ::  luni(:, :), lmat(:, :)
         double precision :: dxi, deta, lxi, leta, dcross, &
             xl, yl, xr, yr, ymax, ymin, dip, dip_rad, pi
@@ -257,31 +316,9 @@ contains
         ymin = theta(1)
         ymax = theta(2)
         do iplane = 1, nplane
-            nxi = nxi_ls(iplane)
-            neta = neta_ls(iplane)
-
-            if (iplane == 1) then
-                xl = xmin
-                yl = ymin
-            else
-                xl = theta(2*iplane - 1)
-                yl = theta(2*iplane)
-            end if
-
-            if (iplane == nplane) then
-                xr = xmax
-                yr = ymax
-            else
-                xr = theta(2*iplane + 1)
-                yr = theta(2*iplane + 2)
-            end if
-
-            dip = theta(2*nplane + iplane)
-            dip_rad = dip*pi/180d0
-
-            lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
-            leta = -zmin/sin(dip_rad)
-
+            call get_geometry(iplane, nplane, theta, nxi, nxi_ls, neta, neta_ls, &
+                              xl, yl, xr, yr, xmin, ymin, xmax, ymax, dip, dip_rad, &
+                              lxi, leta, zmin, fix_xbend, xbend)
             dxi = lxi/nxi
             deta = leta/neta
             dcross = sqrt(dxi**2 + deta**2)

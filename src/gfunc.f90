@@ -1,4 +1,5 @@
 module gfunc
+    use init
     use type_mat
     implicit none
 contains
@@ -243,7 +244,7 @@ contains
                                 id_dof, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                                 node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                                 r1vec, r2vec, nvec, response_dist, uobs, uret, nsar_total, npath, &
-                                nsar_index, gmat_arr, xmin, xmax, zmin)
+                                nsar_index, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
         implicit none
         double precision, intent(inout) :: gmat(:, :), slip_dist(:, :), &
             xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -252,11 +253,11 @@ contains
         integer, intent(in) :: cny_fault(:, :), node_to_elem_val(:, :), &
                                node_to_elem_size(:), id_dof(:), nsar_total
         double precision, intent(in) :: theta(:), coor_fault(:, :), obs_points(:, :), &
-            obs_unitvec(:, :)
-
+            obs_unitvec(:, :), xbend(:)
         integer, intent(in) ::  nplane, nxi_ls(:), neta_ls(:), ngnss, nobs, &
                                nnode_total, ndof_total, ndof_index(:), npath, &
                                nsar_index(:)
+        logical, intent(in) :: fix_xbend
         type(mat), intent(inout) :: gmat_arr(:)
         integer :: iplane, idof, inode, idirection, itarget, iobs, idim, i, j, ipath, k
         integer :: target_id_size, nxi, neta
@@ -282,33 +283,12 @@ contains
         ymin = theta(1)
         ymax = theta(2)
         do iplane = 1, nplane
-            nxi = nxi_ls(iplane)
-            neta = neta_ls(iplane)
-
-            if (iplane == 1) then
-                xl = xmin
-                yl = ymin
-            else
-                xl = theta(2*iplane - 1)
-                yl = theta(2*iplane)
-            end if
-
-            if (iplane == nplane) then
-                xr = xmax
-                yr = ymax
-            else
-                xr = theta(2*iplane + 1)
-                yr = theta(2*iplane + 2)
-            end if
-
-            dip = theta(2*nplane + iplane)
-            dip_rad = dip*pi/180d0
+            call get_geometry(iplane, nplane, theta, nxi, nxi_ls, neta, neta_ls, &
+                              xl, yl, xr, yr, xmin, ymin, xmax, ymax, dip, dip_rad, &
+                              lxi, leta, zmin, fix_xbend, xbend)
 
             strike_rad = atan2(xr - xl, yr - yl)
             strike = strike_rad/pi*180d0
-
-            lxi = sqrt((xr - xl)**2 + (yr - yl)**2)
-            leta = -zmin/sin(dip_rad)
 
             ! xf, yf, zf is coordinate of fault center
             xf = (xl + xr)/2d0 - (zmin*cos(strike_rad))/(2d0*tan(dip_rad))

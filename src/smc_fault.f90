@@ -46,16 +46,18 @@ contains
         slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
         slip_particle_cur, slip_particle_cand, slip_st_rand, &
         flag_output, output_path, npath, nsar_index, &
-        nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+        nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, &
+        fix_xbend, xbend)
         implicit none
         double precision, intent(in) :: theta(:), obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), &
-            xmin, xmax, zmin
+            xmin, xmax, zmin, xbend(:)
         integer, intent(in) :: nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), ngnss, nobs, &
                                nparticle_slip, flag_output, nplane, npath, &
                                nsar_index(:), nsar_total
         character(*), intent(in) :: output_path
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
             lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
             sigma2_full(:), alpha2_full(:), xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -79,11 +81,12 @@ contains
         st_time = omp_get_wtime()
         ! set fault geometry
         call discretize_fault(theta, nplane, nxi_ls, neta_ls, cny_fault, coor_fault, &
-                              node_to_elem_val, node_to_elem_size, id_dof, xmin, xmax, zmin)
+                              node_to_elem_val, node_to_elem_size, id_dof, xmin, xmax, zmin, &
+                              fix_xbend, xbend)
 
         ! calculate laplacian matrix L
         call gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, &
-                           id_dof, ndof_total, luni, lmat, xmin, xmax, zmin)
+                           id_dof, ndof_total, luni, lmat, xmin, xmax, zmin, fix_xbend, xbend)
 
         ! sparse matrix form of lmat
         call gen_sparse_lmat(lmat, lmat_index, lmat_val, ltmat_index, &
@@ -101,14 +104,14 @@ contains
                               id_dof, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                               node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                               r1vec, r2vec, nvec, response_dist, uobs, uret, nsar_total, &
-                              npath, nsar_index, gmat_arr, xmin, xmax, zmin)
+                              npath, nsar_index, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
         en_time = omp_get_wtime()
         ! print *, "green's function :", en_time - st_time
 
         ! diag component of sigma
         ! (variance matrix for likelihood function of slip)
-        log_sigma_sar2 = theta(3*nplane + 2)
-        log_sigma_gnss2 = theta(3*nplane + 3)
+        call get_sigma(theta, fix_xbend, nplane, &
+                       log_sigma_sar2, log_sigma_gnss2, log_alpha2)
         sigma_sar2 = exp(log_sigma_sar2)
         sigma_gnss2 = exp(log_sigma_gnss2)
         do i = 1, nsar_total
@@ -127,7 +130,6 @@ contains
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            log_alpha2 = theta(3*nplane + 1)
             do inode = offset + 1, offset + (nxi + 1)*(neta + 1)
                 alpha2_full(2*inode - 1) = exp(log_alpha2)
                 alpha2_full(2*inode) = exp(log_alpha2)
@@ -267,14 +269,16 @@ contains
                                         slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, slip_assigned_num, &
                                         slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                         slip_particle_cur, slip_particle_cand, slip_st_rand, npath, nsar_index, &
-                                        nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+                                        nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, &
+                                        fix_xbend, xbend)
         implicit none
         integer, intent(in) :: myid, work_size, nplane, ndim, nxi_ls(:), neta_ls(:), nnode_total, &
                                ndof_total, ndof_index(:), ngnss, nobs, nparticle_slip, npath, &
                                nsar_index(:), nsar_total
         double precision, intent(in) :: work_particles(:, :), obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), xmin, xmax, zmin
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), xmin, xmax, zmin, xbend(:)
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
                                   id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
                                   slip_assigned_num(:), slip_id_start(:)
@@ -305,7 +309,7 @@ contains
                          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                          slip_particle_cand, slip_st_rand, 0, "", npath, nsar_index, &
-                         nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+                         nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
             work_likelihood_ls(iparticle) = likelihood
         end do
     end subroutine work_eval_init_particles
@@ -574,14 +578,15 @@ contains
                                   slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                   slip_particle_cand, slip_st_rand, work_acc_count, range, &
                                   npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, &
-                                  xmin, xmax, zmin)
+                                  xmin, xmax, zmin, fix_xbend, xbend)
         implicit none
         integer, intent(in) :: work_assigned_num(:), nplane, id_start(:), work_size, ndim, myid, &
                                nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), ngnss, nobs, nparticle_slip, &
                                npath, nsar_index(:), nsar_total
         double precision, intent(in) :: work_particles(:, :), work_likelihood_ls(:), cov(:, :), gamma, obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :), xmin, xmax, zmin
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :), xmin, xmax, zmin, xbend(:)
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
                                   id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
                                   slip_assigned_num(:), slip_id_start(:), work_acc_count
@@ -618,7 +623,7 @@ contains
                              slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                              slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                              slip_particle_cand, slip_st_rand, 0, "", npath, nsar_index, nsar_total, &
-                             sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+                             sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
             ! likelihood_cur = work_likelihood_ls(iparticle)
             do jparticle = istart, istart + nassigned - 1
                 ! propose particle_cand
@@ -656,7 +661,7 @@ contains
                                   slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                   slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                   slip_particle_cand, slip_st_rand, 0, "", npath, nsar_index, &
-                                  nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+                                  nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
                 ! metropolis test and check domain of definition
                 call random_number_correction(metropolis)
                 if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
@@ -691,15 +696,17 @@ contains
         slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
         slip_st_rand, slip_particle_cur, slip_particle_cand, &
         slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls, &
-        npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+        npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, &
+        fix_xbend, xbend)
         implicit none
         double precision, intent(in) :: obs_points(:, :), &
             obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :), &
-            xmin, xmax, zmin
+            xmin, xmax, zmin, xbend(:)
         integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), ngnss, nobs, &
                                nparticle_slip, nparticle, ndim, &
                                myid, numprocs, npath, nsar_index(:), nsar_total
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
             lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
             sigma2_full(:), alpha2_full(:), xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -798,7 +805,7 @@ contains
                                       slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, slip_assigned_num, &
                                       slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                       slip_particle_cur, slip_particle_cand, slip_st_rand, npath, &
-                                      nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+                                      nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
         call mpi_barrier(mpi_comm_world, ierr)
         call mpi_gather(work_likelihood_ls, work_size, mpi_double_precision, &
                         likelihood_ls, work_size, mpi_double_precision, &
@@ -895,7 +902,7 @@ contains
                                     slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                     slip_particle_cand, slip_st_rand, work_acc_count, range, &
                                     npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, &
-                                    xmin, xmax, zmin)
+                                    xmin, xmax, zmin, fix_xbend, xbend)
             call mpi_barrier(mpi_comm_world, ierr)
             en_time = omp_get_wtime()
             if (myid == 0) then
