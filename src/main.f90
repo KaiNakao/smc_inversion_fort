@@ -30,6 +30,8 @@ program main
                             id_dof(:)
     double precision, allocatable :: coor_fault(:, :)
     double precision :: xmin, xmax, zmin
+    logical :: fix_xbend
+    double precision, allocatable :: xbend(:)
 
     ! observation data
     character(len=200) :: observation_path
@@ -108,6 +110,11 @@ program main
         allocate (nnode_ls(nplane))
         allocate (ndof_ls(nplane))
         allocate (ndof_index(nplane + 1))
+        allocate (xbend(nplane - 1))
+        read (17, *) ! fix-xbend
+        read (17, *) fix_xbend
+        read (17, *) ! xbend
+        read (17, *) xbend
         read (17, *)
         read (17, *) ! number of samples for fault
         read (17, *) nparticle_fault
@@ -150,6 +157,7 @@ program main
         print *, "neta_ls: ", neta_ls
     end if
     call mpi_bcast(nplane, 1, mpi_integer, 0, mpi_comm_world, ierr)
+    call mpi_bcast(fix_xbend, 1, mpi_logical, 0, mpi_comm_world, ierr)
     call mpi_bcast(npath, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(nparticle_fault, 1, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(nparticle_slip, 1, mpi_integer, 0, mpi_comm_world, ierr)
@@ -168,9 +176,11 @@ program main
         allocate (nnode_ls(nplane))
         allocate (ndof_ls(nplane))
         allocate (ndof_index(nplane + 1))
+        allocate (xbend(nplane - 1))
     end if
     call mpi_bcast(nxi_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
     call mpi_bcast(neta_ls, nplane, mpi_integer, 0, mpi_comm_world, ierr)
+    call mpi_bcast(xbend, nplane - 1, mpi_double_precision, 0, mpi_comm_world, ierr)
 
     if (mod(nparticle_fault, numprocs) /= 0) then
         if (myid == 0) then
@@ -219,12 +229,21 @@ program main
     end do
 
     ! dimension of fault parameter
-    ndim_fault = 3*nplane + 3
+    if (fix_xbend) then
+        ndim_fault = 2*nplane + 4
+    else
+        ndim_fault = 3*nplane + 3
+    end if
     ndim_slip = 2*ndof_total
     if (myid == 0) then
         print *, "ndim_fault: ", ndim_fault
         print *, "ndim_slip: ", ndim_slip
+        print *, "fix_xbend: ", fix_xbend
+        print *, "xbend: ", xbend
     end if
+
+    ! call mpi_finalize(ierr)
+    ! stop
 
     ! read observation data
     ! synthetic test
@@ -413,7 +432,7 @@ program main
     ! ! end do
     ! ! close (10)
 
-    ! open (10, file="data/theta.dat", status="old")
+    ! open (10, file="peak_fault.dat", status="old")
     ! do i = 1, ndim_fault
     !     read (10, *) particle(i)
     ! end do
@@ -434,7 +453,7 @@ program main
     !          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
     !          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
     !          slip_particle_cand, slip_st_rand, 1, "output/slip_from_mean_fault.dat", &
-    !          npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+    !          npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
     ! ! neglog = fault_calc_likelihood( &
     ! !          particle, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, ngnss, nobs, cny_fault, &
     ! !          coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
@@ -462,16 +481,6 @@ program main
 
     ! smc for fault
     allocate (range(2, ndim_fault))
-    ! range of uniform prior distribution P(theta)
-    ! ! synthetic test
-    ! ! range(:, :) = reshape((/-5., 15., -15., 15., -39., -10., -20., 20., 50., 90., &
-    ! !                         -2., 2., -2., 2., -10., 2., 1., 50., 1., 50./), &
-    ! !                       (/2, ndim_fault/))
-    ! ! real observation data
-    ! range(:, :) = reshape((/-10, 10, -30, 0, -30, -1, -20, 20, 50, 90, &
-    !                         -2, 2, -2, 2, -10, 2, 1, 50, 1, 50/), &
-    !                       (/2, ndim_fault/))
-
     ! read prior range of theta
     if (myid == 0) then
         open (17, file="data/range.dat", status="old")
@@ -480,21 +489,36 @@ program main
             read (17, *) range(1, i), range(2, i)
         end do
         close (17)
+
         print *, "prior range"
         print *, "ymin ", range(1, 1), range(2, 1)
         print *, "ymax ", range(1, 1), range(2, 2)
-        if (nplane > 1) then
-            do i = 1, nplane - 1
-                print *, "x", i, " ", range(1, 2*i + 1), range(2, 2*i + 1)
-                print *, "y", i, " ", range(1, 2*i + 2), range(2, 2*i + 2)
+        if (fix_xbend) then
+            if (nplane > 1) then
+                do i = 1, nplane - 1
+                    print *, "y", i, " ", range(1, i + 2), range(2, i + 2)
+                end do
+            end if
+            do i = 1, nplane
+                print *, "dip", i, " ", range(1, 2*nplane - 2 + i), range(2, 2*nplane - 2 + i)
             end do
+            print *, "log_alpha2 ", range(1, 2*nplane + 2), range(2, 2*nplane + 2)
+            print *, "log_sigma_sar2 ", range(1, 2*nplane + 3), range(2, 2*nplane + 3)
+            print *, "log_sigma_gnss2 ", range(1, 2*nplane + 4), range(2, 2*nplane + 4)
+        else
+            if (nplane > 1) then
+                do i = 1, nplane - 1
+                    print *, "x", i, " ", range(1, 2*i + 1), range(2, 2*i + 1)
+                    print *, "y", i, " ", range(1, 2*i + 2), range(2, 2*i + 2)
+                end do
+            end if
+            do i = 1, nplane
+                print *, "dip", i, " ", range(1, 2*nplane + i), range(2, 2*nplane + i)
+            end do
+            print *, "log_alpha2 ", range(1, 3*nplane + 1), range(2, 3*nplane + 1)
+            print *, "log_sigma_sar2 ", range(1, 3*nplane + 2), range(2, 3*nplane + 2)
+            print *, "log_sigma_gnss2 ", range(1, 3*nplane + 3), range(2, 3*nplane + 3)
         end if
-        do i = 1, nplane
-            print *, "dip", i, " ", range(1, 2*nplane + i), range(2, 2*nplane + i)
-        end do
-        print *, "log_alpha2 ", range(1, 3*nplane + 1), range(2, 3*nplane + 1)
-        print *, "log_sigma_sar2 ", range(1, 3*nplane + 2), range(2, 3*nplane + 2)
-        print *, "log_sigma_gnss2 ", range(1, 3*nplane + 3), range(2, 3*nplane + 3)
     end if
     call mpi_bcast(range, 2*ndim_fault, mpi_double_precision, 0, &
                    mpi_comm_world, ierr)
@@ -512,7 +536,8 @@ program main
         slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
         slip_st_rand, slip_particle_cur, slip_particle_cand, &
         slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls, &
-        npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+        npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, &
+        fix_xbend, xbend)
     call mpi_finalize(ierr)
 
 contains
@@ -582,7 +607,7 @@ contains
                      slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                      slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                      slip_particle_cand, slip_st_rand, 0, "", &
-                     npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin)
+                     npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
 
             print *, "ID: ", work_size*myid + i
             do j = 1, ndim_slip
@@ -691,7 +716,7 @@ contains
             end do
 
             call discretize_fault(particle, nplane, nxi_ls, neta_ls, cny_fault, coor_fault, &
-                                  node_to_elem_val, node_to_elem_size, id_dof, xmin, xmax, zmin)
+                                  node_to_elem_val, node_to_elem_size, id_dof, xmin, xmax, zmin, fix_xbend, xbend)
 
             offset_patch = 0
             ! loop for patchs
