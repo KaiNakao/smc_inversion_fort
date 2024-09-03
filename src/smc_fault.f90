@@ -870,6 +870,7 @@ contains
         else
             allocate (particles(1, 1))
             allocate (likelihood_ls(1))
+            allocate (q_ls(1))
             allocate (assigned_num(1))
             allocate (sum_assigned_ls(1))
             allocate (displs(1))
