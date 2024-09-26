@@ -14,6 +14,15 @@ contains
         end if
     end subroutine random_number_correction
 
+    subroutine random_number_correction_dd(x)
+        implicit none
+        real(16), intent(inout) :: x
+        call random_number(x)
+        if (x < 1d-5) then
+            x = 1d-5
+        end if
+    end subroutine random_number_correction_dd
+
     subroutine slip_BoxMuller(p, q)
         implicit none
         double precision, intent(inout) :: p, q
@@ -363,11 +372,13 @@ contains
         ! Calulate S_j(mean of the weight)
         evidence = 0d0
         diff_gamma = gamma - gamma_prev
-!$omp parallel do private(iparticle, likelihood) reduction(+ : evidence)
+!$omp parallel do private(iparticle, likelihood) reduction(+:evidence)
         do iparticle = 1, nparticle
             likelihood = likelihood_ls(iparticle)
+            ! print *, exp(-diff_gamma*(likelihood - min_likelihood)), likelihood
             evidence = evidence + exp(-diff_gamma*(likelihood - min_likelihood))
         end do
+        ! print *, "------------------------"
 !$omp end parallel do
         evidence = evidence/nparticle
         neglog_evidence = -log(evidence) + diff_gamma*min_likelihood
@@ -423,6 +434,7 @@ contains
                 wsum = wsum + weights(iparticle)
                 w2sum = w2sum + weights(iparticle)**2
             end do
+!$omp end parallel do
             ess = wsum**2/w2sum
 
             if (ess < ess_threshold) then
@@ -454,10 +466,10 @@ contains
         implicit none
         double precision, intent(inout) :: weights(:)
         integer, intent(in) :: nparticle
-        double precision :: sum
+        real(16) :: sum
         integer :: iparticle
 
-        sum = 0d0
+        sum = real(0, kind=16)
 !$omp parallel do private(iparticle) reduction(+ : sum)
         do iparticle = 1, nparticle
             sum = sum + weights(iparticle)
@@ -474,21 +486,22 @@ contains
                                         mean, nparticle, ndim)
         implicit none
         double precision, intent(in) :: particles(:, :), weights(:)
-        integer, intent(in) :: nparticle, ndim
         double precision, intent(inout) :: mean(:)
+        integer, intent(in) :: nparticle, ndim
+        real(16) :: mean_dd(ndim)
         integer :: iparticle, idim
         double precision ::weight
-        do idim = 1, ndim
-            mean(idim) = 0d0
-        end do
-!$omp parallel do private(iparticle, weight, idim) reduction(+:mean)
+
+        mean_dd = real(0, kind=16)
+!$omp parallel do private(iparticle, weight, idim) reduction(+:mean_dd)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
             do idim = 1, ndim
-                mean(idim) = mean(idim) + weight*particles(idim, iparticle)
+                mean_dd(idim) = mean_dd(idim) + weight*particles(idim, iparticle)
             end do
         end do
 !$omp end parallel do
+        mean = dble(mean_dd)
     end subroutine slip_calc_mean_particles
 
     subroutine slip_calc_cov_particles(particles, weights, mean, &
@@ -497,6 +510,7 @@ contains
         double precision, intent(in) :: particles(:, :), weights(:), mean(:)
         integer, intent(in) :: nparticle, ndim
         double precision, intent(inout) :: cov(:, :), cov_diag(:)
+        real(16) :: cov_diag_dd(ndim)
         integer :: iparticle, idim, jdim, ierr
         double precision weight, di, dj
 
@@ -533,17 +547,18 @@ contains
 !         ! LAPACK function for LU decomposition of matrix
 !         call dpotrf('L', ndim, cov, ndim, ierr)
 
-        cov_diag = 0d0
+        cov_diag_dd = real(0, kind=16)
 !$omp parallel do private(iparticle, weight, idim, di) &
-!$omp reduction(+:cov_diag)
+!$omp reduction(+:cov_diag_dd)
         do iparticle = 1, nparticle
             weight = weights(iparticle)
             do idim = 1, ndim
                 di = particles(idim, iparticle) - mean(idim)
-                cov_diag(idim) = cov_diag(idim) + weight*di*di
+                cov_diag_dd(idim) = cov_diag_dd(idim) + weight*di*di
             end do
         end do
 !$omp end parallel do
+        cov_diag = dble(cov_diag_dd)
 
         do idim = 1, ndim
             if (abs(cov_diag(idim)) < 1d-3) then
@@ -561,10 +576,10 @@ contains
         integer, intent(in) :: nparticle
         integer, intent(inout) :: assigned_num(:)
         integer :: iparticle
-        double precision :: d_nparticle, u
+        real(16) :: d_nparticle, u
         d_nparticle = nparticle
         ! systematic residual resampling
-        call random_number_correction(u)
+        call random_number_correction_dd(u)
         u = u/d_nparticle
         do iparticle = 1, nparticle
             assigned_num(iparticle) = &
@@ -589,8 +604,8 @@ contains
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), ltmat_val(:, :), &
             gmat(:, :), sigma2_full(:), alpha2_full(:), theta(:), &
-            log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), cov_diag(:), &
-            dtau_ls(:), gsdvec(:), gsgmat(:, :), dsd
+            log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), &
+            dtau_ls(:), gsdvec(:), gsgmat(:, :), dsd, cov_diag(:)
         integer, intent(in) :: nnode, ndof, ngnss, nobs, nplane, &
                                nparticle, ndim, lmat_index(:, :), ltmat_index(:, :), &
                                assigned_num(:), ntau_ls(:), ntau_upper, nsar_total
@@ -726,10 +741,11 @@ contains
         integer, intent(in) :: ndim, ntau, lmat_index(:, :), ltmat_index(:, :), &
                                nobs, ndof, nnode, ngnss, nplane, &
                                nsar_total
-        double precision, intent(in) :: post_cur, cov_diag(:), dtau, &
+        double precision, intent(in) :: post_cur, dtau, &
             gmat(:, :), lmat_val(:, :), ltmat_val(:, :), dvec(:), gamma, &
             sigma2_full(:), alpha2_full(:), max_slip, log_sigma_sar2, &
-            log_sigma_gnss2, theta(:), particle_cur(:), gsdvec(:), gsgmat(:, :), dsd
+            log_sigma_gnss2, theta(:), particle_cur(:), gsdvec(:), gsgmat(:, :), dsd, &
+            cov_diag(:)
         double precision, intent(inout) :: ham_cur, pvec(:), particle_cand(:), grad(:), &
             gsvec(:), lsvec(:), likelihood_cand, prior_cand, post_cand, ham_cand
         integer :: idim, itau
@@ -922,8 +938,8 @@ contains
         double precision, intent(in) :: max_slip, dvec(:), &
             lmat_val(:, :), ltmat_val(:, :), &
             gmat(:, :), sigma2_full(:), alpha2_full(:), theta(:), &
-            log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), cov_diag(:), &
-            gsdvec(:), gsgmat(:, :), dsd
+            log_sigma_sar2, log_sigma_gnss2, gamma, cov(:, :), &
+            gsdvec(:), gsgmat(:, :), dsd, cov_diag(:)
         integer, intent(in) :: nnode, ndof, ngnss, nobs, nplane, &
                                nparticle, ndim, lmat_index(:, :), ltmat_index(:, :), &
                                assigned_num(:), tuning_factor, nsar_total
@@ -945,8 +961,9 @@ contains
         integer :: itau, ntau
 
         ! for tuning HMC
-        double precision :: weights_hmc(nparticle), sum_score, dtau_mean
-        double precision :: dham, score, d_nparticle, u, &
+        double precision :: weights_hmc(nparticle), sum_score
+        real(16) :: dtau_mean, d_nparticle, u
+        double precision :: dham, score, &
             dham_ls(nparticle), score_ls(nparticle)
         double precision :: dtau_ls_new(nparticle)
         integer :: iassigned, ntau_ls_new(nparticle), &
@@ -1118,7 +1135,7 @@ contains
 !$omp end parallel do
 
         ! residual systematic resampling
-        call random_number_correction(u)
+        call random_number_correction_dd(u)
         nassigned_hmc = 0
         u = u/d_nparticle
         do iparticle = 1, nparticle, tuning_factor
@@ -1179,7 +1196,7 @@ contains
         end do
 !$omp end parallel do
 
-        dtau_mean = 0d0
+        dtau_mean = real(0, kind=16)
         ntau_mean = 0
 !$omp parallel do private(iparticle) reduction(+:dtau_mean, ntau_mean)
         do iparticle = 1, nparticle
@@ -1459,7 +1476,7 @@ contains
         type(mat), intent(in) :: sigma_sar_mat(:), gmat_arr(:)
         double precision, intent(inout) ::  particles(:, :), &
             particles_new(:, :), likelihood_ls(:), &
-            prior_ls(:), weights(:), mean(:), cov(:, :), &
+            prior_ls(:), weights(:), cov(:, :), mean(:), &
             likelihood_ls_new(:), prior_ls_new(:), &
             st_rand_ls(:, :), metropolis_ls(:), gsvec(:), lsvec(:), &
             particle_cur(:), particle_cand(:), st_rand(:), neglog_ret
@@ -1668,10 +1685,11 @@ contains
         double precision, intent(inout) :: gsvec(:), lsvec(:)
         double precision :: particle_cur(ndim), particle_cand(ndim), &
             dtau, st_rand(ndim), pvec(ndim), v1, v2, &
-            cov_diag(ndim), ham_cur, post_cur, &
+            ham_cur, post_cur, &
             grad(ndim), gamma, likelihood_cand, &
             prior_cand, post_cand, ham_cand, metropolis, &
             likelihood_cur, prior_cur, acc_rate
+        double precision :: cov_diag(ndim)
 
         jparticle_max = 10000
         acc_rate = 0d0

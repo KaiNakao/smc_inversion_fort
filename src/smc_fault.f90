@@ -576,10 +576,10 @@ contains
         double precision, intent(in) :: weights(:)
         integer, intent(inout) :: assigned_num(:)
         integer :: iparticle
-        double precision ::  d_nparticle, u
+        real(16) ::  d_nparticle, u
         d_nparticle = nparticle
         ! systematic residual resampling
-        call random_number_correction(u)
+        call random_number_correction_dd(u)
         u = u/d_nparticle
         ! for(iparticle=0 iparticle < nparticle iparticle + +) {
         do iparticle = 1, nparticle
