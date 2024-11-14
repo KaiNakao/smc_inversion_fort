@@ -6,39 +6,61 @@ module smc_fault
     use omp_lib
     implicit none
 contains
-    subroutine fault_sample_init_particles(particles, nparticle, ndim, range, nplane)
+    double precision function fault_calc_neglog_q(particle, qmean, qcov_inv, log_qcov_det, ndim)
+        implicit none
+        double precision, intent(in) :: particle(:), qmean(:), qcov_inv(:, :), log_qcov_det
+        integer, intent(in) :: ndim
+        double precision :: pi, tmp, delta(ndim)
+        integer :: idim, jdim
+
+        pi = 2d0*asin(1d0)
+        delta = particle - qmean
+        tmp = 0d0
+        do jdim = 1, ndim
+            do idim = 1, ndim
+                tmp = tmp + delta(idim)*qcov_inv(idim, jdim)*delta(jdim)
+            end do
+        end do
+        ! fault_calc_neglog_q = matmul(transpose(particle - qmean), matmul(qcov_inv, (particle - qmean)))/2d0 + &
+        !                       log(2d0*pi)*ndim/2d0 + log_qcov_det/2d0
+        fault_calc_neglog_q = tmp/2d0 + log(2d0*pi)*ndim/2d0 + log_qcov_det/2d0
+    end function fault_calc_neglog_q
+
+    subroutine fault_sample_init_particles(particles, nparticle, ndim, range, nplane, gsmc, &
+                                           qmean, qcov)
         implicit none
 
         double precision, intent(inout) :: particles(:, :)
         integer, intent(in) :: nparticle, ndim, nplane
-        double precision, intent(in) :: range(:, :)
+        double precision, intent(in) :: range(:, :), qmean(:), qcov(:, :)
+        logical, intent(in) :: gsmc
         integer :: idim, iparticle, iplane
-        double precision ::  x, xmin, xmax, randr
-        double precision :: tmp, zmax, zf, strike, lxi, pi, dip, leta, zmin
+        double precision ::  x, xmin, xmax, randr, v1, v2, pi, particle(ndim)
 
         pi = 2d0*asin(1d0)
-        do iparticle = 1, nparticle
-            do idim = 1, ndim
-                xmin = range(1, idim)
-                xmax = range(2, idim)
-                call random_number_correction(randr)
-                x = xmin + randr*(xmax - xmin)
-                particles(idim, iparticle) = x
+        if (gsmc) then
+            ! sampling from N(qmean, qcov)
+            do iparticle = 1, nparticle
+                do idim = 1, ndim
+                    call fault_box_muller(v1, v2)
+                    particle(idim) = v1
+                end do
+                call dtrmv('l', 'n', 'n', ndim, qcov, ndim, particle, 1)
+                do idim = 1, ndim
+                    particles(idim, iparticle) = particle(idim) + qmean(idim)
+                end do
             end do
-            ! top of the fault plane must be underground
-            do iplane = 1, nplane
-                dip = particles(8*iplane - 3, iparticle)
-                dip = dip * pi / 180d0
-                leta = particles(8*iplane - 1, iparticle)
-                zf = particles(8*iplane - 5, iparticle)
-                zmax = min(range(2, 8*iplane - 5), -leta/2d0*sin(dip))
-                zmin = range(1, 8*iplane - 5)
-                if (zf > zmax) then
-                    zf = max(2d0*zmax - zf, zmin)
-                    particles(8*iplane - 5, iparticle) = zf
-                end if
+        else
+            do iparticle = 1, nparticle
+                do idim = 1, ndim
+                    xmin = range(1, idim)
+                    xmax = range(2, idim)
+                    call random_number_correction(randr)
+                    x = xmin + randr*(xmax - xmin)
+                    particles(idim, iparticle) = x
+                end do
             end do
-        end do
+        end if
     end subroutine fault_sample_init_particles
 
     double precision function fault_calc_likelihood( &
@@ -59,15 +81,18 @@ contains
         slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
         slip_particle_cur, slip_particle_cand, slip_st_rand, &
         flag_output, output_path, npath, nsar_index, &
-        nsar_total, sigma_sar_mat, gmat_arr)
+        nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, &
+        fix_xbend, xbend)
         implicit none
         double precision, intent(in) :: theta(:), obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
-        integer, intent(in) :: nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:),  ngnss, nobs, &
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), &
+            xmin, xmax, zmin, xbend(:)
+        integer, intent(in) :: nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), ngnss, nobs, &
                                nparticle_slip, flag_output, nplane, npath, &
                                nsar_index(:), nsar_total
         character(*), intent(in) :: output_path
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
             lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
             sigma2_full(:), alpha2_full(:), xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -91,13 +116,17 @@ contains
         st_time = omp_get_wtime()
         ! set fault geometry
         call discretize_fault(theta, nplane, nxi_ls, neta_ls, cny_fault, coor_fault, &
-                              node_to_elem_val, node_to_elem_size, id_dof)
+                              node_to_elem_val, node_to_elem_size, id_dof, xmin, xmax, zmin, &
+                              fix_xbend, xbend)
+
         ! calculate laplacian matrix L
-        call gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, id_dof, ndof_total, luni, lmat)
+        call gen_laplacian(theta, nplane, nnode_total, nxi_ls, neta_ls, &
+                           id_dof, ndof_total, luni, lmat, xmin, xmax, zmin, fix_xbend, xbend)
 
         ! sparse matrix form of lmat
         call gen_sparse_lmat(lmat, lmat_index, lmat_val, ltmat_index, &
                              ltmat_val, nnode_total, ndof_total)
+
         ! matrix L^T L
         call calc_ll(llmat, lmat, nnode_total, ndof_total)
         en_time = omp_get_wtime()
@@ -110,14 +139,14 @@ contains
                               id_dof, ngnss, nobs, nnode_total, ndof_total, ndof_index, target_id_val, &
                               node_id_in_patch, xinode, etanode, uxinode, uetanode, &
                               r1vec, r2vec, nvec, response_dist, uobs, uret, nsar_total, &
-                              npath, nsar_index, gmat_arr)
+                              npath, nsar_index, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
         en_time = omp_get_wtime()
         ! print *, "green's function :", en_time - st_time
 
         ! diag component of sigma
         ! (variance matrix for likelihood function of slip)
-        log_sigma_sar2 = theta(8*nplane + 1)
-        log_sigma_gnss2 = theta(8*nplane + 2)
+        call get_sigma(theta, fix_xbend, nplane, &
+                       log_sigma_sar2, log_sigma_gnss2, log_alpha2)
         sigma_sar2 = exp(log_sigma_sar2)
         sigma_gnss2 = exp(log_sigma_gnss2)
         do i = 1, nsar_total
@@ -136,12 +165,11 @@ contains
         do iplane = 1, nplane
             nxi = nxi_ls(iplane)
             neta = neta_ls(iplane)
-            log_alpha2 = theta(8*iplane)
-            do inode = offset + 1, offset + (nxi + 1) * (neta + 1)
-                alpha2_full(2 * inode - 1) = exp(log_alpha2)
-                alpha2_full(2 * inode ) = exp(log_alpha2)
+            do inode = offset + 1, offset + (nxi + 1)*(neta + 1)
+                alpha2_full(2*inode - 1) = exp(log_alpha2)
+                alpha2_full(2*inode) = exp(log_alpha2)
             end do
-            offset = offset + (nxi + 1) * (neta + 1)
+            offset = offset + (nxi + 1)*(neta + 1)
         end do
 
         ! open(10, file="tmp/sigma1", status="replace")
@@ -190,7 +218,7 @@ contains
         !         if (iobs == jobs) then
         !             ! write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2*sigma_gnss2)
         !             write(10, "(e20.10)", advance="no") 1d0/(obs_sigma(iobs)**2)
-        !         else 
+        !         else
         !             write(10, "(e20.10)", advance="no") 0d0
         !         end if
         !     end do
@@ -228,14 +256,14 @@ contains
         !     do jnode = 1, 2*nnode_total
         !         if (inode == jnode) then
         !             write(10, "(e20.10)", advance="no") alpha2_full(inode)
-        !         else 
+        !         else
         !             write(10, "(e20.10)", advance="no") 0d0
         !         end if
         !     end do
         !     write(10, *)
         ! end do
         ! close(10)
-        
+
         ! open(10, file="tmp/log_sigma_sar2", status="replace")
         !     write(10, "(e20.10)", advance="no") log_sigma_sar2
         ! close(10)
@@ -264,7 +292,8 @@ contains
     end function fault_calc_likelihood
 
     subroutine work_eval_init_particles(myid, work_size, nplane, ndim, particle_cur, &
-                                        work_particles, work_likelihood_ls, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, ngnss, nobs, &
+                                        work_particles, work_likelihood_ls, nxi_ls, neta_ls, &
+                                        nnode_total, ndof_total, ndof_index, ngnss, nobs, &
                                         cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
                                         id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                         slip_dist, obs_points, obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
@@ -275,14 +304,17 @@ contains
                                         slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, slip_assigned_num, &
                                         slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                         slip_particle_cur, slip_particle_cand, slip_st_rand, npath, nsar_index, &
-                                        nsar_total, sigma_sar_mat, gmat_arr)
+                                        nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, &
+                                        fix_xbend, xbend, gsmc, qmean, qcov_inv, log_qcov_det, work_q_ls)
         implicit none
         integer, intent(in) :: myid, work_size, nplane, ndim, nxi_ls(:), neta_ls(:), nnode_total, &
                                ndof_total, ndof_index(:), ngnss, nobs, nparticle_slip, npath, &
                                nsar_index(:), nsar_total
         double precision, intent(in) :: work_particles(:, :), obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:)
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), xmin, xmax, zmin, xbend(:), &
+            qmean(:), qcov_inv(:, :), log_qcov_det
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend, gsmc
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
                                   id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
                                   slip_assigned_num(:), slip_id_start(:)
@@ -292,10 +324,10 @@ contains
             uobs(:), uret(:), slip_particles(:, :), slip_particles_new(:, :), &
             slip_likelihood_ls(:), slip_prior_ls(:), slip_weights(:), slip_mean(:), slip_cov(:, :), &
             slip_likelihood_ls_new(:), slip_prior_ls_new(:), slip_st_rand_ls(:, :), slip_metropolis_ls(:), &
-            gsvec(:), lsvec(:), slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:)
+            gsvec(:), lsvec(:), slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:), work_q_ls(:)
         type(mat), intent(inout) :: gmat_arr(:)
         integer :: iparticle, idim
-        double precision :: likelihood
+        double precision :: likelihood, q
         do iparticle = 1, work_size
             do idim = 1, ndim
                 particle_cur(idim) = work_particles(idim, iparticle)
@@ -313,8 +345,12 @@ contains
                          slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                          slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                          slip_particle_cand, slip_st_rand, 0, "", npath, nsar_index, &
-                         nsar_total, sigma_sar_mat, gmat_arr)
+                         nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
             work_likelihood_ls(iparticle) = likelihood
+            if (gsmc) then
+                q = fault_calc_neglog_q(particle_cur, qmean, qcov_inv, log_qcov_det, ndim)
+                work_q_ls(iparticle) = q
+            end if
         end do
     end subroutine work_eval_init_particles
 
@@ -354,25 +390,37 @@ contains
     end subroutine calc_mean_std_vector
 
     subroutine fault_find_next_gamma(gamma, gamma_prev, likelihood_ls, &
-                                     weights, nparticle, fault_evidence)
+                                     weights, nparticle, fault_evidence, &
+                                     gsmc, q_ls)
         implicit none
 
         double precision, intent(inout) :: gamma, fault_evidence
         double precision, intent(in) :: gamma_prev
-        double precision, intent(in) :: likelihood_ls(:)
+        double precision, intent(in) :: likelihood_ls(:), q_ls(:)
         double precision, intent(inout) :: weights(:)
         integer, intent(in) :: nparticle
+        logical, intent(in) :: gsmc
         integer :: iparticle, cnt
         double precision :: min_likelihood, likelihood, cv_threshold, evidence_tmp
         double precision :: lower, upper, err
         double precision :: diff_gamma, mean, std, cv
+        double precision :: neglogratio_ls(nparticle), neglogratio, min_neglogratio
+
         ! cv_threshold = 5d-1
         cv_threshold = 2d-1
-        ! find minimum of negative log likelihood
-        min_likelihood = likelihood_ls(1)
-        do iparticle = 1, nparticle
-            min_likelihood = min(min_likelihood, likelihood_ls(iparticle))
-        end do
+        if (gsmc) then
+            neglogratio_ls = likelihood_ls - q_ls
+            min_neglogratio = neglogratio_ls(1)
+            do iparticle = 1, nparticle
+                min_neglogratio = min(min_neglogratio, neglogratio_ls(iparticle))
+            end do
+        else
+            ! find minimum of negative log likelihood
+            min_likelihood = likelihood_ls(1)
+            do iparticle = 1, nparticle
+                min_likelihood = min(min_likelihood, likelihood_ls(iparticle))
+            end do
+        end if
         ! binary search for the next gamma
         ! such that c.o.v of the weight is equivalent to cv_threashold
         lower = gamma_prev
@@ -382,11 +430,19 @@ contains
         do while (err > 10d0**(-8d0))
             gamma = (lower + upper)/2d0
             diff_gamma = gamma - gamma_prev
-            do iparticle = 1, nparticle
-                likelihood = likelihood_ls(iparticle)
-                ! extract min_likelihood to avoid underflow of the weight
-                weights(iparticle) = exp(-diff_gamma*(likelihood - min_likelihood))
-            end do
+            if (gsmc) then
+                do iparticle = 1, nparticle
+                    neglogratio = neglogratio_ls(iparticle)
+                    ! extract min_neglogratio to avoid underflow of the weight
+                    weights(iparticle) = exp(-diff_gamma*(neglogratio - min_neglogratio))
+                end do
+            else
+                do iparticle = 1, nparticle
+                    likelihood = likelihood_ls(iparticle)
+                    ! extract min_likelihood to avoid underflow of the weight
+                    weights(iparticle) = exp(-diff_gamma*(likelihood - min_likelihood))
+                end do
+            end if
 
             ! calculate c.o.v = mean/std
             call calc_mean_std_vector(weights, nparticle, mean, std)
@@ -403,17 +459,28 @@ contains
             if (cnt > 1000) then
                 exit
             end if
-            cnt = cnt + 1 
+            cnt = cnt + 1
         end do
         ! Calulate S_j(mean of the weight)
         evidence_tmp = 0d0
         diff_gamma = gamma - gamma_prev
-        do iparticle = 1, nparticle
-            likelihood = likelihood_ls(iparticle)
-            evidence_tmp = evidence_tmp + exp(-diff_gamma*(likelihood - min_likelihood))
-        end do
+        if (gsmc) then
+            do iparticle = 1, nparticle
+                neglogratio = neglogratio_ls(iparticle)
+                evidence_tmp = evidence_tmp + exp(-diff_gamma*(neglogratio - min_neglogratio))
+            end do
+        else
+            do iparticle = 1, nparticle
+                likelihood = likelihood_ls(iparticle)
+                evidence_tmp = evidence_tmp + exp(-diff_gamma*(likelihood - min_likelihood))
+            end do
+        end if
         evidence_tmp = evidence_tmp/nparticle
-        fault_evidence = fault_evidence - log(evidence_tmp) + diff_gamma*min_likelihood
+        if (gsmc) then
+            fault_evidence = fault_evidence - log(evidence_tmp) + diff_gamma*min_neglogratio
+        else
+            fault_evidence = fault_evidence - log(evidence_tmp) + diff_gamma*min_likelihood
+        end if
 
     end subroutine fault_find_next_gamma
 
@@ -509,10 +576,10 @@ contains
         double precision, intent(in) :: weights(:)
         integer, intent(inout) :: assigned_num(:)
         integer :: iparticle
-        double precision ::  d_nparticle, u
+        real(16) ::  d_nparticle, u
         d_nparticle = nparticle
         ! systematic residual resampling
-        call random_number_correction(u)
+        call random_number_correction_dd(u)
         u = u/d_nparticle
         ! for(iparticle=0 iparticle < nparticle iparticle + +) {
         do iparticle = 1, nparticle
@@ -525,13 +592,15 @@ contains
     subroutine fault_reorder_to_send(assigned_num, particles, &
                                      tmp_assigned_num, tmp_particles, &
                                      sorted_idx, nparticle, ndim, numprocs, &
-                                     work_size, tmp_likelihood_ls, likelihood_ls)
+                                     work_size, tmp_likelihood_ls, likelihood_ls, &
+                                     gsmc, q_ls, tmp_q_ls)
         implicit none
         integer, intent(inout) :: assigned_num(:), tmp_assigned_num(:)
         double precision, intent(inout) :: particles(:, :), tmp_particles(:, :), &
-            tmp_likelihood_ls(:), likelihood_ls(:)
+            tmp_likelihood_ls(:), likelihood_ls(:), q_ls(:), tmp_q_ls(:)
         integer, intent(inout) :: sorted_idx(:)
         integer, intent(in) :: nparticle, ndim, numprocs, work_size
+        logical, intent(in) :: gsmc
         integer :: iparticle, idim, iproc
         integer :: id_org, id_new
         do iparticle = 1, nparticle
@@ -541,6 +610,9 @@ contains
                     particles(idim, iparticle)
             end do
             tmp_likelihood_ls(iparticle) = likelihood_ls(iparticle)
+            if (gsmc) then
+                tmp_q_ls(iparticle) = q_ls(iparticle)
+            end if
         end do
 
         do iparticle = 1, nparticle
@@ -557,6 +629,9 @@ contains
                         tmp_particles(idim, id_org)
                 end do
                 likelihood_ls(id_new) = tmp_likelihood_ls(id_org)
+                if (gsmc) then
+                    q_ls(id_new) = tmp_q_ls(id_org)
+                end if
             end do
         end do
     end subroutine fault_reorder_to_send
@@ -581,14 +656,18 @@ contains
                                   slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                   slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                   slip_particle_cand, slip_st_rand, work_acc_count, range, &
-                                  npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+                                  npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, &
+                                  xmin, xmax, zmin, fix_xbend, xbend, gsmc, work_q_ls, work_q_ls_new, &
+                                  qmean, qcov_inv, log_qcov_det)
         implicit none
         integer, intent(in) :: work_assigned_num(:), nplane, id_start(:), work_size, ndim, myid, &
                                nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), ngnss, nobs, nparticle_slip, &
                                npath, nsar_index(:), nsar_total
         double precision, intent(in) :: work_particles(:, :), work_likelihood_ls(:), cov(:, :), gamma, obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :)
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :), xmin, xmax, zmin, xbend(:), &
+            qmean(:), qcov_inv(:, :), log_qcov_det
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend, gsmc
         integer, intent(inout) :: cny_fault(:, :), node_to_elem_val(:, :), node_to_elem_size(:), &
                                   id_dof(:), lmat_index(:, :), ltmat_index(:, :), target_id_val(:), node_id_in_patch(:), &
                                   slip_assigned_num(:), slip_id_start(:), work_acc_count
@@ -599,10 +678,10 @@ contains
             uobs(:), uret(:), slip_particles(:, :), slip_particles_new(:, :), slip_likelihood_ls(:), &
             slip_prior_ls(:), slip_weights(:), slip_mean(:), slip_cov(:, :), slip_likelihood_ls_new(:), &
             slip_prior_ls_new(:), slip_st_rand_ls(:, :), slip_metropolis_ls(:), gsvec(:), lsvec(:), &
-            slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:)
+            slip_particle_cur(:), slip_particle_cand(:), slip_st_rand(:), work_q_ls(:), work_q_ls_new(:)
         type(mat), intent(inout) :: gmat_arr(:)
         integer :: iparticle, jparticle, idim, jdim, nassigned, istart, iplane
-        double precision :: likelihood_cur, likelihood_cand, metropolis, dip, pi, leta, zf, zmax, zmin
+        double precision :: likelihood_cur, likelihood_cand, metropolis, dip, pi, leta, zf, zmax, q_cur, q_cand
         double precision :: v1, v2
 
         pi = 2d0*asin(1d0)
@@ -625,8 +704,10 @@ contains
                              slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                              slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                              slip_particle_cand, slip_st_rand, 0, "", npath, nsar_index, nsar_total, &
-                             sigma_sar_mat, gmat_arr)
-            ! likelihood_cur = work_likelihood_ls(iparticle)
+                             sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
+            if (gsmc) then
+                q_cur = work_q_ls(iparticle)
+            end if
             do jparticle = istart, istart + nassigned - 1
                 ! propose particle_cand
                 do idim = 1, ndim
@@ -649,22 +730,10 @@ contains
                         end if
                     end if
                 end do
-                ! top of the fault plane must be underground
-                do iplane = 1, nplane
-                    dip = particle_cand(8*iplane - 3)
-                    dip = dip * pi / 180d0
-                    leta = particle_cand(8*iplane - 1)
-                    zf = particle_cand(8*iplane - 5)
-                    zmax = min(range(2, 8*iplane - 5), -leta/2d0*sin(dip))
-                    zmin = range(1, 8*iplane - 5)
-                    if (zf > zmax) then
-                        zf = max(2d0*zmax - zf, zmin)
-                        particle_cand(8*iplane - 5) = zf
-                    end if
-                end do
                 ! calculate negative log likelihood of the proposed configuration
                 likelihood_cand = fault_calc_likelihood( &
-                                  particle_cand, nplane, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, ngnss, nobs, cny_fault, &
+                                  particle_cand, nplane, nxi_ls, neta_ls, &
+                                  nnode_total, ndof_total, ndof_index, ngnss, nobs, cny_fault, &
                                   coor_fault, node_to_elem_val, node_to_elem_size, id_dof, luni, lmat, &
                                   lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, slip_dist, obs_points, &
                                   obs_unitvec, obs_sigma, sigma2_full, alpha2_full, target_id_val, node_id_in_patch, &
@@ -675,19 +744,35 @@ contains
                                   slip_prior_ls_new, slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                   slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                   slip_particle_cand, slip_st_rand, 0, "", npath, nsar_index, &
-                                  nsar_total, sigma_sar_mat, gmat_arr)
+                                  nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend)
+                if (gsmc) then
+                    q_cand = fault_calc_neglog_q(particle_cand, qmean, qcov_inv, log_qcov_det, ndim)
+                end if
                 ! metropolis test and check domain of definition
                 call random_number_correction(metropolis)
-                if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
-                    do idim = 1, ndim
-                        particle_cur(idim) = particle_cand(idim)
-                    end do
-                    likelihood_cur = likelihood_cand
-                    work_acc_count = work_acc_count + 1d0
+                if (gsmc) then
+                    if (gamma*(likelihood_cur - likelihood_cand) + (1d0 - gamma)*(q_cur - q_cand) > log(metropolis)) then
+                        do idim = 1, ndim
+                            particle_cur(idim) = particle_cand(idim)
+                        end do
+                        likelihood_cur = likelihood_cand
+                        q_cur = q_cand
+                        work_acc_count = work_acc_count + 1d0
+                    end if
                 else
+                    if (gamma*(likelihood_cur - likelihood_cand) > log(metropolis)) then
+                        do idim = 1, ndim
+                            particle_cur(idim) = particle_cand(idim)
+                        end do
+                        likelihood_cur = likelihood_cand
+                        work_acc_count = work_acc_count + 1d0
+                    end if
                 end if
                 ! save to new particle list
                 work_likelihood_ls_new(jparticle) = likelihood_cur
+                if (gsmc) then
+                    work_q_ls_new(jparticle) = q_cur
+                end if
                 do idim = 1, ndim
                     work_particles_new(idim, jparticle) = &
                         particle_cur(idim)
@@ -710,14 +795,17 @@ contains
         slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, &
         slip_st_rand, slip_particle_cur, slip_particle_cand, &
         slip_assigned_num, slip_id_start, slip_st_rand_ls, slip_metropolis_ls, &
-        npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+        npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, &
+        fix_xbend, xbend, gsmc, qmean, qcov, qcov_inv, log_qcov_det)
         implicit none
         double precision, intent(in) :: obs_points(:, :), &
-            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :)
+            obs_unitvec(:, :), obs_sigma(:), max_slip, dvec(:), range(:, :), &
+            xmin, xmax, zmin, xbend(:), qmean(:), qcov(:, :), qcov_inv(:, :), log_qcov_det
         integer, intent(in) :: nplane, nxi_ls(:), neta_ls(:), nnode_total, ndof_total, ndof_index(:), ngnss, nobs, &
                                nparticle_slip, nparticle, ndim, &
                                myid, numprocs, npath, nsar_index(:), nsar_total
         type(mat), intent(in) :: sigma_sar_mat(:)
+        logical, intent(in) :: fix_xbend, gsmc
         double precision, intent(inout) :: coor_fault(:, :), luni(:, :), &
             lmat(:, :), lmat_val(:, :), ltmat_val(:, :), llmat(:, :), gmat(:, :), slip_dist(:, :), &
             sigma2_full(:), alpha2_full(:), xinode(:), etanode(:), uxinode(:), uetanode(:), &
@@ -741,14 +829,14 @@ contains
         ! array for only the master process
         integer, allocatable :: sum_assigned_ls(:), displs(:)
         double precision, allocatable :: weights(:), mean(:)
-        double precision, allocatable :: likelihood_ls(:), tmp_likelihood_ls(:)
+        double precision, allocatable :: likelihood_ls(:), tmp_likelihood_ls(:), q_ls(:), tmp_q_ls(:)
         integer, allocatable :: assigned_num(:)
         integer, allocatable :: sorted_idx(:)
         double precision, allocatable :: tmp_particles(:, :)
         integer, allocatable :: tmp_assigned_num(:)
         ! for MPI
         double precision, allocatable :: work_particles(:, :), work_particles_new(:, :), &
-            work_likelihood_ls(:), work_likelihood_ls_new(:)
+            work_likelihood_ls(:), work_likelihood_ls_new(:), work_q_ls(:), work_q_ls_new(:)
         integer, allocatable :: work_assigned_num(:)
 
         double precision, allocatable :: particle_cur(:), particle_cand(:)
@@ -777,9 +865,12 @@ contains
             allocate (sorted_idx(nparticle))
             allocate (tmp_particles(ndim, nparticle))
             allocate (tmp_assigned_num(nparticle))
+            allocate (q_ls(nparticle))
+            allocate (tmp_q_ls(nparticle))
         else
             allocate (particles(1, 1))
             allocate (likelihood_ls(1))
+            allocate (q_ls(1))
             allocate (assigned_num(1))
             allocate (sum_assigned_ls(1))
             allocate (displs(1))
@@ -795,16 +886,19 @@ contains
         allocate (id_start(work_size))
         allocate (st_rand(ndim))
         allocate (cov(ndim, ndim))
+        allocate (work_q_ls(50*work_size))
+        allocate (work_q_ls_new(50*work_size))
         iter = 0
         if (myid == 0) then
             ! sampling from the prior distribution
-            call fault_sample_init_particles(particles, nparticle, ndim, range, nplane)
+            call fault_sample_init_particles(particles, nparticle, ndim, range, nplane, gsmc, qmean, qcov)
         end if
         call mpi_scatter(particles, ndim*work_size, mpi_double_precision, &
                          work_particles, ndim*work_size, mpi_double_precision, &
                          0, mpi_comm_world, ierr)
         call work_eval_init_particles(myid, work_size, nplane, ndim, particle_cur, &
-                                      work_particles, work_likelihood_ls, nxi_ls, neta_ls, nnode_total, ndof_total, ndof_index, ngnss, nobs, &
+                                      work_particles, work_likelihood_ls, nxi_ls, neta_ls, &
+                                      nnode_total, ndof_total, ndof_index, ngnss, nobs, &
                                       cny_fault, coor_fault, node_to_elem_val, node_to_elem_size, &
                                       id_dof, luni, lmat, lmat_index, lmat_val, ltmat_index, ltmat_val, llmat, gmat, &
                                       slip_dist, obs_points, obs_unitvec, obs_sigma, sigma2_full, alpha2_full, &
@@ -815,11 +909,17 @@ contains
                                       slip_cov, slip_likelihood_ls_new, slip_prior_ls_new, slip_assigned_num, &
                                       slip_id_start, slip_st_rand_ls, slip_metropolis_ls, gsvec, lsvec, &
                                       slip_particle_cur, slip_particle_cand, slip_st_rand, npath, &
-                                      nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+                                      nsar_index, nsar_total, sigma_sar_mat, gmat_arr, xmin, xmax, zmin, fix_xbend, xbend, &
+                                      gsmc, qmean, qcov_inv, log_qcov_det, work_q_ls)
         call mpi_barrier(mpi_comm_world, ierr)
         call mpi_gather(work_likelihood_ls, work_size, mpi_double_precision, &
                         likelihood_ls, work_size, mpi_double_precision, &
                         0, mpi_comm_world, ierr)
+        if (gsmc) then
+            call mpi_gather(work_q_ls, work_size, mpi_double_precision, &
+                            q_ls, work_size, mpi_double_precision, &
+                            0, mpi_comm_world, ierr)
+        end if
         if (myid == 0) then
             ! output result of stage 0(disabled)
             write (iter_char, "(i0)") iter
@@ -841,7 +941,8 @@ contains
             if (myid == 0) then
                 ! find the gamma such that c.o.v of weights = 0.5
                 gamma_prev = gamma
-                call fault_find_next_gamma(gamma, gamma_prev, likelihood_ls, weights, nparticle, fault_evidence)
+                call fault_find_next_gamma(gamma, gamma_prev, likelihood_ls, weights, nparticle, fault_evidence, &
+                                           gsmc, q_ls)
                 print *, "gamma: ", gamma
                 ! normalize weights(sum of weights needs to be 1)
                 call fault_normalize_weights(weights, nparticle)
@@ -852,7 +953,8 @@ contains
                 call fault_resample_particles(nparticle, weights, assigned_num)
                 call fault_reorder_to_send(assigned_num, particles, tmp_assigned_num, &
                                            tmp_particles, sorted_idx, nparticle, ndim, &
-                                           numprocs, work_size, tmp_likelihood_ls, likelihood_ls)
+                                           numprocs, work_size, tmp_likelihood_ls, likelihood_ls, &
+                                           gsmc, q_ls, tmp_q_ls)
                 do iproc = 1, numprocs
                     sum_assigned = 0
                     do iparticle = (iproc - 1)*work_size + 1, iproc*work_size
@@ -876,6 +978,11 @@ contains
                              0, mpi_comm_world, ierr)
             call mpi_scatter(assigned_num, work_size, mpi_integer, work_assigned_num, &
                              work_size, mpi_integer, 0, mpi_comm_world, ierr)
+            if (gsmc) then
+                call mpi_scatter(q_ls, work_size, mpi_double_precision, &
+                                 work_q_ls, work_size, mpi_double_precision, &
+                                 0, mpi_comm_world, ierr)
+            end if
 
             id_start(1) = 1
             do iparticle = 1, work_size - 1
@@ -911,7 +1018,9 @@ contains
                                     slip_assigned_num, slip_id_start, slip_st_rand_ls, &
                                     slip_metropolis_ls, gsvec, lsvec, slip_particle_cur, &
                                     slip_particle_cand, slip_st_rand, work_acc_count, range, &
-                                    npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr)
+                                    npath, nsar_index, nsar_total, sigma_sar_mat, gmat_arr, &
+                                    xmin, xmax, zmin, fix_xbend, xbend, gsmc, work_q_ls, work_q_ls_new, &
+                                    qmean, qcov_inv, log_qcov_det)
             call mpi_barrier(mpi_comm_world, ierr)
             en_time = omp_get_wtime()
             if (myid == 0) then
@@ -920,6 +1029,9 @@ contains
 
             call mpi_gatherv(work_likelihood_ls_new, sum_assigned, mpi_double_precision, &
                              likelihood_ls, sum_assigned_ls, displs, mpi_double_precision, &
+                             0, mpi_comm_world, ierr)
+            call mpi_gatherv(work_q_ls_new, sum_assigned, mpi_double_precision, &
+                             q_ls, sum_assigned_ls, displs, mpi_double_precision, &
                              0, mpi_comm_world, ierr)
             if (myid == 0) then
                 do iproc = 1, numprocs
