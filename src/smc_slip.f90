@@ -843,10 +843,6 @@ contains
             !     print *, (dtmp2 - dtmp1)/2d-8, grad(idim)
             ! end do
             ! stop
-            call slip_calc_grad(grad, particle_cand, gmat, lmat_index, lmat_val, &
-                                ltmat_index, ltmat_val, dvec, gamma, &
-                                gsvec, lsvec, sigma2_full, alpha2_full, &
-                                nobs, ndof, nnode, ndim, gsdvec, gsgmat)
             do idim = 1, ndim
                 pvec(idim) = pvec(idim) - grad(idim)*dtau
                 ! if (ieee_is_nan(pvec(idim))) then
@@ -1015,6 +1011,7 @@ contains
         en_time = omp_get_wtime()
 
         score_ls = -1d0
+        acc_rate = 0d0
 !$omp parallel do private(&
 !$omp iparticle, istart, nassigned, idim, particle_cur, likelihood_cur, &
 !$omp prior_cur, post_cur, jparticle, particle_cand, st_rand, pvec, &
